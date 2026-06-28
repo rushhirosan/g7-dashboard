@@ -39,11 +39,15 @@ jobs:
           KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
 
       - name: Revalidate Vercel cache
-        if: success() && secrets.REVALIDATE_SECRET != ''
+        if: success()
         env:
           REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET }}
           SITE_URL: ${{ secrets.SITE_URL }}
         run: |
+          if [ -z "$REVALIDATE_SECRET" ]; then
+            echo "REVALIDATE_SECRET not set — skipping revalidate"
+            exit 0
+          fi
           base="${SITE_URL:-https://g7-dashboard.vercel.app}"
           curl -sf -X POST "${base}/api/revalidate?secret=${REVALIDATE_SECRET}"
 
@@ -53,11 +57,14 @@ jobs:
     if: failure()
     steps:
       - name: Notify Discord
-        if: secrets.DISCORD_WEBHOOK_URL != ''
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL not set — skipping"
+            exit 0
+          fi
           payload=$(jq -n \
             --arg content "❌ World Front Page cron failed" \
             --arg run "$RUN_URL" \
@@ -80,14 +87,16 @@ jobs:
             -d "$payload"
 
       - name: Notify Slack
-        if: secrets.SLACK_WEBHOOK_URL != ''
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL not set — skipping"
+            exit 0
+          fi
           payload=$(jq -n \
-            --arg text "❌ World Front Page cron failed\nRepo: ${{ github.repository }}\nBranch: ${{ github.ref_name }}\nRun: \($run)" \
-            --arg run "$RUN_URL" \
+            --arg text "❌ World Front Page cron failed — ${{ github.repository }}@${{ github.ref_name }} — ${RUN_URL}" \
             '{ text: $text }')
           curl -sf -X POST "$SLACK_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
