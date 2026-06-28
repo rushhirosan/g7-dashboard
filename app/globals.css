@@ -81,7 +81,7 @@ a { color: inherit; text-decoration: none; }
   background: linear-gradient(135deg, #2563eb, #7c3aed);
   color: white;
   box-shadow: var(--shadow-soft);
-  font-size: 25px;
+  font-size: 16px;
   font-weight: 820;
   flex-shrink: 0;
 }
@@ -159,7 +159,7 @@ a { color: inherit; text-decoration: none; }
 .theme-btn:hover,
 .segmented button:hover { transform: translateY(-1px); }
 
-/* ── Intro section ── */
+/* ── Intro / section headings ── */
 .intro {
   margin-bottom: 22px;
 }
@@ -168,6 +168,19 @@ a { color: inherit; text-decoration: none; }
   margin: 0;
   font-size: 20px;
   letter-spacing: -0.04em;
+}
+
+.country-section {
+  margin-bottom: 22px;
+}
+
+.section-heading {
+  margin: 0 0 18px;
+  font-size: 13px;
+  font-weight: 720;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 /* ── Grid ── */
@@ -392,7 +405,7 @@ a.headline-title:hover {
 @media (max-width: 700px) {
   .page { width: min(100% - 22px, 1240px); padding-top: 20px; }
   .brand-row { align-items: flex-start; }
-  .logo { width: 46px; height: 46px; border-radius: 16px; font-size: 22px; }
+  .logo { width: 46px; height: 46px; border-radius: 16px; font-size: 14px; }
   .grid { grid-template-columns: 1fr; }
   .actions { width: 100%; }
   .segmented { flex: 1; }

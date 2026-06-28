@@ -25,11 +25,11 @@ export function Header({ lang, onLangChange, updatedAt }: Props) {
   return (
     <header className="topbar">
       <div className="brand-row">
-        <div className="logo" aria-hidden="true">G7</div>
+        <div className="logo" aria-hidden="true">WFP</div>
         <div className="title-group">
-          <h1>G7 news dashboard</h1>
+          <h1>World Front Page</h1>
           <p className="subtitle">
-            {lang === "ja" ? "今日のG7を、あなたの言語で。" : "Today's G7, in your language."}
+            {lang === "ja" ? "G7 · 中国 · インド" : "G7 · China · India"}
           </p>
           <div className="updated">
             <span aria-hidden="true">◷</span>

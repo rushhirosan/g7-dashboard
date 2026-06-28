@@ -3,11 +3,11 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
-  title: "G7 news dashboard",
-  description: "今日のG7を、あなたの言語で。See what the world is reading.",
+  title: "World Front Page",
+  description: "G7 · China · India — Top headlines in your language.",
   openGraph: {
-    title: "G7 news dashboard",
-    description: "今日のG7を、あなたの言語で。",
+    title: "World Front Page",
+    description: "G7 · China · India — Top headlines in your language.",
     type: "website",
   },
 };

@@ -1,6 +1,6 @@
 """
-G7 News Cron Job
-Fetches RSS feeds for each G7 country, translates titles via DeepL,
+World Front Page — News Cron Job
+Fetches RSS feeds for G7 + major economies (China, India), translates via DeepL,
 and stores structured JSON in Vercel KV (Upstash Redis REST API).
 
 Schedule: 4x/day — 01:00 / 07:00 / 13:00 / 19:00 JST
@@ -107,6 +107,30 @@ SOURCES = [
         "rss": "https://www.cbc.ca/webfeed/rss/rss-topstories",
         "lang": "EN",
     },
+    {
+        "code": "cn",
+        "flag": "🇨🇳",
+        "name": {"ja": "中国", "en": "China"},
+        "source": {
+            "name": "SCMP",
+            "url": "https://www.scmp.com",
+            "originalLang": {"ja": "英語", "en": "English"},
+        },
+        "rss": "https://www.scmp.com/rss/91/feed",
+        "lang": "EN",
+    },
+    {
+        "code": "in",
+        "flag": "🇮🇳",
+        "name": {"ja": "インド", "en": "India"},
+        "source": {
+            "name": "The Hindu",
+            "url": "https://www.thehindu.com",
+            "originalLang": {"ja": "英語", "en": "English"},
+        },
+        "rss": "https://www.thehindu.com/feeder/default.rss",
+        "lang": "EN",
+    },
 ]
 
 DEEPL_FREE_URL = "https://api-free.deepl.com/v2/translate"
@@ -210,7 +234,7 @@ def main() -> None:
             log.error("Missing required env var: %s", key)
             raise SystemExit(1)
 
-    log.info("=== G7 news cron started ===")
+    log.info("=== World Front Page cron started ===")
     countries = []
 
     for src in SOURCES:

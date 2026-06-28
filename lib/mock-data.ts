@@ -99,6 +99,32 @@ export function mockData(): NewsData {
           { title: { original: "Canada's jobs report surprises economists", ja: "雇用統計、専門家の予想を上回る結果に", en: "Canada's jobs report surprises economists" }, publishedAt: ago(270), url: "https://www.cbc.ca" },
         ],
       },
+      {
+        code: "cn",
+        flag: "🇨🇳",
+        name: { ja: "中国", en: "China" },
+        source: { name: "SCMP", url: "https://www.scmp.com", originalLang: { ja: "英語", en: "English" } },
+        headlines: [
+          { title: { original: "China's tech giants expand AI investment amid global competition", ja: "中国のテック大手、世界競争の中でAI投資を拡大", en: "China's tech giants expand AI investment amid global competition" }, publishedAt: ago(14), url: "https://www.scmp.com" },
+          { title: { original: "Beijing announces new measures to support property market", ja: "北京、不動産市場支援の新策を発表", en: "Beijing announces new measures to support property market" }, publishedAt: ago(32), url: "https://www.scmp.com" },
+          { title: { original: "Trade talks with EU show signs of progress", ja: "EUとの貿易協議、進展の兆し", en: "Trade talks with EU show signs of progress" }, publishedAt: ago(70), url: "https://www.scmp.com" },
+          { title: { original: "Hong Kong launches new visa scheme for tech talent", ja: "香港、テック人材向け新ビザ制度を開始", en: "Hong Kong launches new visa scheme for tech talent" }, publishedAt: ago(125), url: "https://www.scmp.com" },
+          { title: { original: "Manufacturing data beats expectations in latest survey", ja: "製造業データ、最新調査で予想上回る", en: "Manufacturing data beats expectations in latest survey" }, publishedAt: ago(255), url: "https://www.scmp.com" },
+        ],
+      },
+      {
+        code: "in",
+        flag: "🇮🇳",
+        name: { ja: "インド", en: "India" },
+        source: { name: "The Hindu", url: "https://www.thehindu.com", originalLang: { ja: "英語", en: "English" } },
+        headlines: [
+          { title: { original: "India's GDP growth forecast revised upward", ja: "インドのGDP成長予測、上方修正", en: "India's GDP growth forecast revised upward" }, publishedAt: ago(11), url: "https://www.thehindu.com" },
+          { title: { original: "Monsoon rains bring relief to drought-hit regions", ja: "モンスーン雨、干ばつ地域に救い", en: "Monsoon rains bring relief to drought-hit regions" }, publishedAt: ago(38), url: "https://www.thehindu.com" },
+          { title: { original: "Government unveils new semiconductor incentive package", ja: "政府、新たな半導体インセンティブを発表", en: "Government unveils new semiconductor incentive package" }, publishedAt: ago(85), url: "https://www.thehindu.com" },
+          { title: { original: "Opposition parties rally ahead of state elections", ja: "州議会選挙前に野党が結集", en: "Opposition parties rally ahead of state elections" }, publishedAt: ago(145), url: "https://www.thehindu.com" },
+          { title: { original: "India and US hold talks on defence cooperation", ja: "インドと米国、防衛協力で協議", en: "India and US hold talks on defence cooperation" }, publishedAt: ago(265), url: "https://www.thehindu.com" },
+        ],
+      },
     ],
   };
 }
