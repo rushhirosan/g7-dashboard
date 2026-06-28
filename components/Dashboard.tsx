@@ -32,7 +32,7 @@ export function Dashboard({ data }: Props) {
             ? Array.from({ length: TOTAL_COUNTRY_COUNT }).map((_, i) => (
                 <SkeletonCard key={i} />
               ))
-            : data.countries.map((country, i) => (
+            : (data.countries ?? []).map((country, i) => (
                 <CountryCard key={country.code} country={country} lang={lang} index={i} />
               ))}
         </div>

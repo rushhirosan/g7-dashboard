@@ -35,6 +35,11 @@ def load_dotenv_local() -> None:
 
 load_dotenv_local()
 
+if not os.environ.get("KV_REST_API_URL") and os.environ.get("UPSTASH_REDIS_REST_URL"):
+    os.environ["KV_REST_API_URL"] = os.environ["UPSTASH_REDIS_REST_URL"]
+if not os.environ.get("KV_REST_API_TOKEN") and os.environ.get("UPSTASH_REDIS_REST_TOKEN"):
+    os.environ["KV_REST_API_TOKEN"] = os.environ["UPSTASH_REDIS_REST_TOKEN"]
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
@@ -290,14 +295,15 @@ def process_country(src: dict) -> dict | None:
 
 
 def set_kv(key: str, value: dict) -> None:
+    # Upstash REST: POST body is the Redis value (JSON string of payload).
+    body = json.dumps(value, ensure_ascii=False)
     resp = requests.post(
         f"{KV_REST_API_URL}/set/{key}",
         headers={
             "Authorization": f"Bearer {KV_REST_API_TOKEN}",
-            "Content-Type": "application/json",
+            "Content-Type": "application/json; charset=utf-8",
         },
-        # Vercel KV REST API expects the value as a JSON string
-        data=json.dumps({"value": json.dumps(value)}),
+        data=body.encode("utf-8"),
         timeout=30,
     )
     resp.raise_for_status()
