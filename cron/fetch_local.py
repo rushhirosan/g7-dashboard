@@ -12,7 +12,6 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-import feedparser
 import requests
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -35,7 +34,7 @@ def load_dotenv_local() -> None:
 load_dotenv_local()
 
 sys.path.insert(0, str(Path(__file__).parent))
-from main import SOURCES, translate  # noqa: E402
+from main import SOURCES, fetch_rss_for_country, translate  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -43,85 +42,7 @@ log = logging.getLogger(__name__)
 DEEPL_API_KEY = os.environ.get("DEEPL_API_KEY")
 OUTPUT = ROOT / "data" / "news-snapshot.json"
 
-# Used when primary RSS fails (e.g. AP DNS, CBC timeout)
-RSS_FALLBACKS: dict[str, list[dict]] = {
-    "us": [
-        {
-            "rss": "https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml",
-            "source": {
-                "name": "BBC",
-                "url": "https://www.bbc.com/news/world/us_and_canada",
-                "originalLang": {"ja": "英語", "en": "English"},
-            },
-        },
-        {
-            "rss": "https://feeds.npr.org/1001/rss.xml",
-            "source": {
-                "name": "NPR",
-                "url": "https://www.npr.org",
-                "originalLang": {"ja": "英語", "en": "English"},
-            },
-        },
-    ],
-    "ca": [
-        {
-            "rss": "https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/canada/",
-            "source": {
-                "name": "The Globe and Mail",
-                "url": "https://www.theglobeandmail.com/canada/",
-                "originalLang": {"ja": "英語", "en": "English"},
-            },
-        },
-    ],
-}
-
-LANG_TO_DEEPL = {"JA": "JA", "EN": "EN", "FR": "FR", "IT": "IT", "DE": "DE"}
 LANG_TO_MYMEMORY = {"JA": "ja", "EN": "en", "FR": "fr", "IT": "it", "DE": "de"}
-
-
-def fetch_rss(url: str, limit: int = 5) -> list[dict]:
-    resp = requests.get(
-        url,
-        headers={"User-Agent": "g7-dashboard/0.1 (+https://github.com/g7-dashboard)"},
-        timeout=60,
-    )
-    resp.raise_for_status()
-    feed = feedparser.parse(resp.content)
-    entries = []
-    for entry in feed.entries[:limit]:
-        parsed = entry.get("published_parsed") or entry.get("updated_parsed")
-        if parsed:
-            dt = datetime(*parsed[:6], tzinfo=timezone.utc)
-        else:
-            dt = datetime.now(timezone.utc)
-        entries.append({
-            "title": entry.get("title", "").strip(),
-            "url": entry.get("link", ""),
-            "publishedAt": dt.isoformat(),
-        })
-    return entries
-
-
-def fetch_rss_for_country(src: dict) -> tuple[list[dict], dict]:
-    """Try primary RSS, then local fallbacks. Returns (entries, effective_source)."""
-    candidates = [{"rss": src["rss"], "source": src["source"]}]
-    candidates.extend(RSS_FALLBACKS.get(src["code"], []))
-
-    for candidate in candidates:
-        try:
-            entries = fetch_rss(candidate["rss"])
-            if entries:
-                if candidate["rss"] != src["rss"]:
-                    log.warning(
-                        "Using fallback RSS for %s: %s",
-                        src["code"],
-                        candidate["rss"],
-                    )
-                return entries, candidate["source"]
-        except Exception as exc:
-            log.warning("RSS failed %s (%s): %s", src["code"], candidate["rss"], exc)
-
-    return [], src["source"]
 
 
 def translate_mymemory(texts: list[str], source_lang: str, target_lang: str) -> list[str]:

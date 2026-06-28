@@ -4,3 +4,4 @@ node_modules/
 data/news-snapshot.json
 __pycache__/
 *.pyc
+.vercel

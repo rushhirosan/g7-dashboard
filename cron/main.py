@@ -11,9 +11,29 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 import feedparser
 import requests
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def load_dotenv_local() -> None:
+    env_path = ROOT / ".env.local"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip().strip("'\"")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+load_dotenv_local()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -133,6 +153,40 @@ SOURCES = [
     },
 ]
 
+RSS_FETCH_TIMEOUT = 60
+
+# Used when primary RSS fails (e.g. AP DNS, CBC timeout)
+RSS_FALLBACKS: dict[str, list[dict]] = {
+    "us": [
+        {
+            "rss": "https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml",
+            "source": {
+                "name": "BBC",
+                "url": "https://www.bbc.com/news/world/us_and_canada",
+                "originalLang": {"ja": "英語", "en": "English"},
+            },
+        },
+        {
+            "rss": "https://feeds.npr.org/1001/rss.xml",
+            "source": {
+                "name": "NPR",
+                "url": "https://www.npr.org",
+                "originalLang": {"ja": "英語", "en": "English"},
+            },
+        },
+    ],
+    "ca": [
+        {
+            "rss": "https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/canada/",
+            "source": {
+                "name": "The Globe and Mail",
+                "url": "https://www.theglobeandmail.com/canada/",
+                "originalLang": {"ja": "英語", "en": "English"},
+            },
+        },
+    ],
+}
+
 DEEPL_FREE_URL = "https://api-free.deepl.com/v2/translate"
 
 
@@ -151,7 +205,7 @@ def fetch_rss(url: str, limit: int = 5) -> list[dict]:
     resp = requests.get(
         url,
         headers={"User-Agent": "g7-dashboard/0.1 (+https://github.com/g7-dashboard)"},
-        timeout=30,
+        timeout=RSS_FETCH_TIMEOUT,
     )
     resp.raise_for_status()
     feed = feedparser.parse(resp.content)
@@ -170,9 +224,31 @@ def fetch_rss(url: str, limit: int = 5) -> list[dict]:
     return entries
 
 
+def fetch_rss_for_country(src: dict) -> tuple[list[dict], dict]:
+    """Try primary RSS, then fallbacks. Returns (entries, effective_source)."""
+    candidates = [{"rss": src["rss"], "source": src["source"]}]
+    candidates.extend(RSS_FALLBACKS.get(src["code"], []))
+
+    for candidate in candidates:
+        try:
+            entries = fetch_rss(candidate["rss"])
+            if entries:
+                if candidate["rss"] != src["rss"]:
+                    log.warning(
+                        "Using fallback RSS for %s: %s",
+                        src["code"],
+                        candidate["rss"],
+                    )
+                return entries, candidate["source"]
+        except Exception as exc:
+            log.warning("RSS failed %s (%s): %s", src["code"], candidate["rss"], exc)
+
+    return [], src["source"]
+
+
 def process_country(src: dict) -> dict | None:
     log.info("Processing %s (%s)...", src["code"], src["source"]["name"])
-    entries = fetch_rss(src["rss"])
+    entries, source = fetch_rss_for_country(src)
     if not entries:
         log.warning("No entries for %s", src["code"])
         return None
@@ -208,7 +284,7 @@ def process_country(src: dict) -> dict | None:
         "code": src["code"],
         "flag": src["flag"],
         "name": src["name"],
-        "source": src["source"],
+        "source": source,
         "headlines": headlines,
     }
 
