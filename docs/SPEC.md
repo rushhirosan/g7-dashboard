@@ -289,9 +289,7 @@ g7-dashboard/
 ├── cron/
 │   ├── main.py             本番バッチ
 │   ├── fetch_local.py      ローカルスナップショット
-│   ├── crontab             スケジュール定義
-│   ├── Dockerfile          cron ワーカー用
-│   └── fly.toml            Fly.io デプロイ設定（任意）
+│   └── requirements.txt    Python 依存
 ├── data/
 │   └── news-snapshot.json  ローカル用（gitignore）
 └── docs/
@@ -307,7 +305,8 @@ g7-dashboard/
 | 項目 | 状態 |
 |------|------|
 | Footer 各ページ | リンクのみ（`#`） |
-| Vercel Cron によるバッチ | 未実装（`cron/fly.toml` 等で代替可能） |
+| Vercel Cron によるバッチ | 未採用（GitHub Actions を使用） |
+| On-Demand Revalidation | 実装済（`/api/revalidate`） |
 | ユーザー認証 | なし |
 | 記事本文表示 | 意図的に非対応 |
 | 国フィルタ / 検索 | なし（全 G7 固定表示） |

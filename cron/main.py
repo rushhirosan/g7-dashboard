@@ -330,7 +330,7 @@ def main() -> None:
 
     if not countries:
         log.error("Nothing processed — aborting KV write")
-        return
+        raise SystemExit(1)
 
     payload = {
         "updatedAt": datetime.now(timezone.utc).isoformat(),

@@ -12,8 +12,7 @@ g7-dashboard は **2つのプロセス** に分かれている。
 | **ニュース取得ジョブ（Python）** | **別途デプロイ**（下記） | RSS 取得 → DeepL 翻訳 → KV 書き込み |
 
 > **注意**: 本リポジトリは **trend-dashboard とは別プロジェクト**。  
-> trend-dashboard は Fly.io 上でアプリ本体＋スケジューラが一体。  
-> g7-dashboard の **UI は Vercel** で、`cron/` はデータ更新用のバッチのみ。
+> g7-dashboard の **UI は Vercel**、`cron/` はデータ更新用の Python バッチのみ。
 
 ---
 
@@ -21,8 +20,9 @@ g7-dashboard は **2つのプロセス** に分かれている。
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  cron/main.py  （1日4回・手動 or 外部スケジューラ）           │
-│    RSS (7カ国) → DeepL 翻訳 → Vercel KV                     │
+│  GitHub Actions (1日4回 + workflow_dispatch)                 │
+│    cron/main.py → RSS (9カ国) → DeepL → Vercel KV           │
+│    成功時 → POST /api/revalidate                             │
 └──────────────────────────┬──────────────────────────────────┘
                            │  SET news:latest
                            ▼
@@ -34,7 +34,7 @@ g7-dashboard は **2つのプロセス** に分かれている。
 ┌─────────────────────────────────────────────────────────────┐
 │  Next.js (Vercel)  app/page.tsx                             │
 │    getNewsData() → Dashboard 表示                             │
-│    ISR: revalidate = 21600（最大6時間キャッシュ）            │
+│    ISR: revalidate = 21600（フォールバック最大6時間）         │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -44,7 +44,7 @@ g7-dashboard は **2つのプロセス** に分かれている。
 
 ### 実行内容
 
-1. G7 7カ国分の RSS から Top 5 見出しを取得
+1. G7 + 主要経済国（計9カ国）の RSS から Top 5 見出しを取得
 2. DeepL API でタイトルを日英（必要に応じて他言語）に翻訳
 3. JSON を Vercel KV のキー **`news:latest`** に保存
 
@@ -52,46 +52,45 @@ g7-dashboard は **2つのプロセス** に分かれている。
 
 **1日4回、JST の 01:00 / 07:00 / 13:00 / 19:00**
 
-| JST | UTC (crontab) |
-|-----|---------------|
+| JST | UTC |
+|-----|-----|
 | 01:00 | 16:00 |
 | 07:00 | 22:00 |
 | 13:00 | 04:00 |
 | 19:00 | 10:00 |
 
-crontab 定義: [`cron/crontab`](../cron/crontab)
-
 ```
-0 16 * * *  … main.py
-0 22 * * *  … main.py
-0  4 * * *  … main.py
-0 10 * * *  … main.py
+0 16 * * *  … main.py   # 01:00 JST
+0 22 * * *  … main.py   # 07:00 JST
+0  4 * * *  … main.py   # 13:00 JST
+0 10 * * *  … main.py   # 19:00 JST
 ```
 
-### ホスティング（cron ワーカー）
+### 定期実行（GitHub Actions）
 
-**現状、Vercel 上にはスケジューラはない。** ジョブ本体は `cron/` にあり、定期実行は **別インフラで crontab 相当を回す** 前提。
+[`.github/workflows/fetch-news.yml`](../.github/workflows/fetch-news.yml) で **1日4回 + 手動実行** を実行する。
 
 | 方式 | 状態 | 備考 |
 |------|------|------|
-| **Fly.io（`cron/fly.toml`）** | 設定ファイルあり・**未デプロイなら未稼働** | Docker + システム cron で `main.py` を常時スケジュール。`fly deploy` は `cron/` ディレクトリから |
-| **Vercel Cron** | **未実装** | API Route + `vercel.json` で代替可能 |
-| **GitHub Actions** | **未実装** | `schedule:` で `main.py` を実行可能 |
-| **手動** | ローカル / CI から実行 | 本番 KV へ書き込む場合は env 要 |
+| **GitHub Actions** | **実装済** | `schedule:` + `workflow_dispatch` |
+| **手動（ローカル）** | 利用可 | `cd cron && python3 main.py`（`.env.local` の env 使用） |
+| **Vercel Cron** | 未採用 | Python バッチには向かない |
 
-Fly.io 用ファイル（**ダッシュボード本体ではなく cron 専用**）:
+#### GitHub Secrets（Repository → Settings → Secrets and variables → Actions）
 
-- [`cron/fly.toml`](../cron/fly.toml) — アプリ名 `g7-news-cron`、リージョン `nrt`
-- [`cron/Dockerfile`](../cron/Dockerfile) — Python 3.12 + cron
-- [`cron/crontab`](../cron/crontab) — 上記4スケジュール
+| Secret | 必須 | 用途 |
+|--------|------|------|
+| `DEEPL_API_KEY` | ✅ | タイトル翻訳 |
+| `KV_REST_API_URL` | ✅ | KV REST URL |
+| `KV_REST_API_TOKEN` | ✅ | KV 認証 |
+| `REVALIDATE_SECRET` | ✅ | cron 成功後の ISR 破棄（Vercel と同じ値） |
+| `SITE_URL` | 任意 | 本番 URL（未設定時 `https://g7-dashboard.vercel.app`） |
+| `DISCORD_WEBHOOK_URL` | 任意 | 失敗時 Discord 通知 |
+| `SLACK_WEBHOOK_URL` | 任意 | 失敗時 Slack 通知 |
 
-Fly デプロイ時の secrets 例:
+#### 手動実行
 
-```bash
-cd cron
-fly secrets set DEEPL_API_KEY=... KV_REST_API_URL=... KV_REST_API_TOKEN=...
-fly deploy
-```
+GitHub → **Actions** → **Fetch news** → **Run workflow**
 
 ### 必要な環境変数（本番ジョブ）
 
@@ -113,7 +112,7 @@ fly deploy
 2. **本番** — Vercel KV の `news:latest`
 3. **フォールバック** — KV 未設定 / 取得失敗時は `mockData()`
 
-### ページキャッシュ（ISR）
+### ページキャッシュ（ISR + On-Demand Revalidation）
 
 [`app/page.tsx`](../app/page.tsx):
 
@@ -121,17 +120,16 @@ fly deploy
 export const revalidate = 21600; // 秒 = 6時間
 ```
 
-- cron が KV を更新しても、**ページは最長6時間** 古いキャッシュのまま表示されうる
-- 6時間は「1日4回更新」と概ね整合する値（厳密同期ではない）
+- cron 成功後、GitHub Actions が [`app/api/revalidate/route.ts`](../app/api/revalidate/route.ts) を POST し **即時キャッシュ破棄**
+- revalidate API が失敗した場合のみ、**最大6時間** 古いキャッシュが残りうる
 
 ### Vercel 側の環境変数
-
-ダッシュボード表示に必要:
 
 | 変数 | 用途 |
 |------|------|
 | `KV_REST_API_URL` | KV 読み取り |
 | `KV_REST_API_TOKEN` | KV 読み取り |
+| `REVALIDATE_SECRET` | `/api/revalidate` 認証（GitHub Actions と同じ値） |
 
 `DEEPL_API_KEY` は **Next.js では使わない**（cron / ローカル snapshot のみ）。
 
@@ -169,10 +167,11 @@ npm run dev
 
 | パス | 説明 |
 |------|------|
+| `.github/workflows/fetch-news.yml` | 定期 cron + revalidate + 失敗通知 |
+| `app/api/revalidate/route.ts` | On-Demand ISR |
 | `cron/main.py` | 本番用バッチ（RSS → DeepL → KV） |
 | `cron/fetch_local.py` | ローカル用ワンショット取得 |
-| `cron/crontab` | 1日4回の cron 定義 |
-| `cron/fly.toml` | Fly.io への cron ワーカーデプロイ設定（任意） |
+| `cron/requirements.txt` | Python 依存 |
 | `app/page.tsx` | ISR `revalidate` |
 | `lib/kv.ts` | データ取得ロジック |
 | `.env.example` | 環境変数テンプレート |
@@ -181,10 +180,10 @@ npm run dev
 
 ## 6. 運用チェックリスト
 
-- [ ] Vercel に Next.js をデプロイ、`KV_*` を設定
+- [ ] Vercel に Next.js をデプロイ、`KV_*` + `REVALIDATE_SECRET` を設定
 - [ ] Vercel KV（Upstash）ストアを作成
-- [ ] cron を **いずれかの方法** で 1日4回実行（Fly deploy / 未実装の Vercel Cron 等）
-- [ ] cron 側に `DEEPL_API_KEY` + `KV_*` を設定
-- [ ] 初回: 手動で `cron/main.py` を1回実行し KV にデータがあることを確認
+- [ ] GitHub Secrets に `DEEPL_API_KEY`, `KV_*`, `REVALIDATE_SECRET` を設定
+- [ ] （任意）`DISCORD_WEBHOOK_URL` / `SLACK_WEBHOOK_URL` を設定
+- [ ] Actions → **Fetch news** → **Run workflow** で初回実行し KV にデータがあることを確認
 
 cron を一度も動かしていない場合、本番 UI は **mock 相当の空データ or 古い KV** になる。
