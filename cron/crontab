@@ -1,0 +1,10 @@
+# G7 news fetch — 4x/day at 01:00 / 07:00 / 13:00 / 19:00 JST (UTC+9)
+# UTC equivalents:     16:00 / 22:00 / 04:00 / 10:00 UTC
+DEEPL_API_KEY=changeme
+KV_REST_API_URL=changeme
+KV_REST_API_TOKEN=changeme
+
+0 16 * * * root /usr/local/bin/python /app/main.py >> /var/log/g7-news.log 2>&1
+0 22 * * * root /usr/local/bin/python /app/main.py >> /var/log/g7-news.log 2>&1
+0  4 * * * root /usr/local/bin/python /app/main.py >> /var/log/g7-news.log 2>&1
+0 10 * * * root /usr/local/bin/python /app/main.py >> /var/log/g7-news.log 2>&1
