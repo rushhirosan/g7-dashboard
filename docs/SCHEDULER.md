@@ -4,15 +4,13 @@
 
 ## 概要
 
-g7-dashboard は **2つのプロセス** に分かれている。
-
 | コンポーネント | ホスティング | 役割 |
 |----------------|--------------|------|
 | **ダッシュボード（Next.js）** | **Vercel** | UI 表示。Vercel KV から `news:latest` を読む |
-| **ニュース取得ジョブ（Python）** | **別途デプロイ**（下記） | RSS 取得 → DeepL 翻訳 → KV 書き込み |
+| **スケジューラ** | **Upstash QStash** | JST 01/07/13/19 に `/api/cron/fetch` を POST |
+| **ニュース取得** | **Vercel Serverless** | `lib/fetch-news.ts` — RSS → DeepL → KV |
 
-> **注意**: 本リポジトリは **trend-dashboard とは別プロジェクト**。  
-> g7-dashboard の **UI は Vercel**、`cron/` はデータ更新用の Python バッチのみ。
+> g7-dashboard の UI・データ更新とも **Vercel 上**。QStash は Upstash（KV と同アカウント）の cron サービス。
 
 ---
 
@@ -20,9 +18,15 @@ g7-dashboard は **2つのプロセス** に分かれている。
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  GitHub Actions (1日4回 + workflow_dispatch)                 │
-│    cron/main.py → RSS (9カ国) → DeepL → Vercel KV           │
-│    成功時 → POST /api/revalidate                             │
+│  Upstash QStash (JST 01/07/13/19)                           │
+│    POST /api/cron/fetch  (署名検証)                          │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Vercel  app/api/cron/fetch/route.ts                        │
+│    lib/fetch-news.ts → RSS (9カ国) → DeepL → KV             │
+│    revalidatePath("/")                                       │
 └──────────────────────────┬──────────────────────────────────┘
                            │  SET news:latest
                            ▼
@@ -32,7 +36,7 @@ g7-dashboard は **2つのプロセス** に分かれている。
                            │  GET news:latest
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Next.js (Vercel)  app/page.tsx                             │
+│  Next.js  app/page.tsx                                      │
 │    getNewsData() → Dashboard 表示                             │
 │    ISR: revalidate = 21600（フォールバック最大6時間）         │
 └─────────────────────────────────────────────────────────────┘
@@ -40,114 +44,86 @@ g7-dashboard は **2つのプロセス** に分かれている。
 
 ---
 
-## 1. ニュース取得ジョブ（`cron/main.py`）
+## 1. 定期実行（Upstash QStash）
 
-### 実行内容
-
-1. G7 + 主要経済国（計9カ国）の RSS から Top 5 見出しを取得
-2. DeepL API でタイトルを日英（必要に応じて他言語）に翻訳
-3. JSON を Vercel KV のキー **`news:latest`** に保存
-
-### 実行スケジュール（本番想定）
+### スケジュール
 
 **1日4回、JST の 01:00 / 07:00 / 13:00 / 19:00**
 
-| JST | UTC |
-|-----|-----|
-| 01:00 | 16:00 |
-| 07:00 | 22:00 |
-| 13:00 | 04:00 |
-| 19:00 | 10:00 |
+QStash cron（JST タイムゾーン指定）:
 
 ```
-0 16 * * *  … main.py   # 01:00 JST
-0 22 * * *  … main.py   # 07:00 JST
-0  4 * * *  … main.py   # 13:00 JST
-0 10 * * *  … main.py   # 19:00 JST
+CRON_TZ=Asia/Tokyo 0 1,7,13,19 * * *
 ```
-
-### 定期実行（GitHub Actions）
-
-[`.github/workflows/fetch-news.yml`](../.github/workflows/fetch-news.yml) で **1日4回 + 手動実行** を実行する。
 
 | 方式 | 状態 | 備考 |
 |------|------|------|
-| **GitHub Actions** | **実装済** | `schedule:` + `workflow_dispatch` |
-| **手動（ローカル）** | 利用可 | `cd cron && python3 main.py`（`.env.local` の env 使用） |
-| **Vercel Cron** | 未採用 | Python バッチには向かない |
+| **Upstash QStash** | **本番** | 時刻精度が高い。無料枠で 1日4回は十分 |
+| **GitHub Actions** | 手動バックアップ | `workflow_dispatch` のみ（Python `cron/main.py`） |
+| **ローカル** | 開発用 | `npm run fetch:snapshot` |
 
-#### GitHub Secrets（Repository → Settings → Secrets and variables → Actions）
+### 初回セットアップ
 
-| Secret | 必須 | 用途 |
-|--------|------|------|
-| `DEEPL_API_KEY` | ✅ | タイトル翻訳 |
-| `KV_REST_API_URL` | ✅ | KV REST URL |
-| `KV_REST_API_TOKEN` | ✅ | KV 認証 |
-| `REVALIDATE_SECRET` | ✅ | cron 成功後の ISR 破棄（Vercel と同じ値） |
-| `SITE_URL` | 任意 | 本番 URL（未設定時 `https://g7-dashboard.vercel.app`） |
-| `DISCORD_WEBHOOK_URL` | 任意 | 失敗時 Discord 通知 |
-| `SLACK_WEBHOOK_URL` | 任意 | 失敗時 Slack 通知 |
+#### 1. Vercel 環境変数
 
-#### 手動実行
-
-GitHub → **Actions** → **Fetch news** → **Run workflow**
-
-### 必要な環境変数（本番ジョブ）
+[Upstash Console → QStash](https://console.upstash.com/qstash) から取得し、Vercel **Production** に設定:
 
 | 変数 | 用途 |
 |------|------|
-| `DEEPL_API_KEY` | タイトル翻訳（DeepL API Free: `api-free.deepl.com`） |
-| `KV_REST_API_URL` | Vercel KV / Upstash REST URL |
-| `KV_REST_API_TOKEN` | KV 認証トークン |
+| `DEEPL_API_KEY` | タイトル翻訳 |
+| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | KV 読み書き（Redis 連携で自動設定可） |
+| `QSTASH_CURRENT_SIGNING_KEY` | QStash 署名検証 |
+| `QSTASH_NEXT_SIGNING_KEY` | QStash 署名検証（ローテーション用） |
+| `DISCORD_WEBHOOK_URL` | 任意 — 失敗時 Discord 通知 |
+
+設定後 **Redeploy**。
+
+#### 2. QStash スケジュール登録
+
+デプロイ後、ローカルから 1 回実行:
+
+```bash
+# .env.local に QSTASH_TOKEN を追加（QStash Console → QSTASH_TOKEN）
+SITE_URL=https://g7-dashboard.vercel.app npm run setup:qstash
+```
+
+スクリプト: [`scripts/setup-qstash.mjs`](../scripts/setup-qstash.mjs)
+
+Upstash Console → **QStash → Schedules** に `world-front-page-fetch` が表示されれば OK。
+
+#### 3. 動作確認
+
+QStash Console → Schedules → 対象スケジュール → **Trigger now**  
+または数分待って本番の「最終更新」時刻が変わることを確認。
 
 ---
 
-## 2. ダッシュボード（Vercel / Next.js）
+## 2. API エンドポイント
 
-### データ読み取り
+### `POST /api/cron/fetch`
 
-[`lib/kv.ts`](../lib/kv.ts) の優先順位:
+- QStash からのみ受け付け（`verifySignatureAppRouter`）
+- RSS 取得 → DeepL → KV 書込 → `revalidatePath("/")`
+- 失敗時: HTTP 500 + Discord 通知（Webhook 設定時）
+- `maxDuration = 300`（9カ国並列取得のため Pro 推奨）
 
-1. **開発** — `data/news-snapshot.json` が存在すればそれを使用（スケジューラ不要）
-2. **本番** — Vercel KV の `news:latest`
-3. **フォールバック** — KV 未設定 / 取得失敗時は `mockData()`
+実装: [`app/api/cron/fetch/route.ts`](../app/api/cron/fetch/route.ts)  
+ロジック: [`lib/fetch-news.ts`](../lib/fetch-news.ts)
 
-### ページキャッシュ（ISR + On-Demand Revalidation）
+### `POST /api/revalidate`（レガシー）
 
-[`app/page.tsx`](../app/page.tsx):
-
-```ts
-export const revalidate = 21600; // 秒 = 6時間
-```
-
-- cron 成功後、GitHub Actions が [`app/api/revalidate/route.ts`](../app/api/revalidate/route.ts) を POST し **即時キャッシュ破棄**
-- revalidate API が失敗した場合のみ、**最大6時間** 古いキャッシュが残りうる
-
-### Vercel 側の環境変数
-
-| 変数 | 用途 |
-|------|------|
-| `KV_REST_API_URL` | KV 読み取り |
-| `KV_REST_API_TOKEN` | KV 読み取り |
-| `REVALIDATE_SECRET` | `/api/revalidate` 認証（GitHub Actions と同じ値） |
-
-`DEEPL_API_KEY` は **Next.js では使わない**（cron / ローカル snapshot のみ）。
+手動 ISR 破棄用。QStash 経路では `/api/cron/fetch` 内で revalidate するため通常不要。
 
 ---
 
 ## 3. ローカル開発
 
-**自動スケジューラは動かない。** 手動でスナップショットを生成する。
+**QStash は本番のみ。** ローカルでは手動スナップショット:
 
 ```bash
-# .env.local に DEEPL_API_KEY を設定（推奨）
 npm run fetch:snapshot   # → data/news-snapshot.json
 npm run dev
 ```
-
-- 実装: [`cron/fetch_local.py`](../cron/fetch_local.py)
-- RSS フォールバック・MyMemory 翻訳（DeepL 未設定時）あり
-- `news-snapshot.json` は `.gitignore` 対象
 
 ---
 
@@ -155,35 +131,47 @@ npm run dev
 
 | 環境 | `updatedAt` の意味 |
 |------|-------------------|
-| 本番 | 直近の **cron 成功時刻**（KV に書き込んだ時刻） |
-| ローカル（snapshot） | **`fetch:snapshot` 実行時刻**（リロードでは変わらない） |
-| ローカル（mock） | **リクエストのたびに現在時刻**（未使用推奨） |
+| 本番 | 直近の **QStash → /api/cron/fetch 成功時刻** |
+| ローカル（snapshot） | `fetch:snapshot` 実行時刻 |
+| ローカル（mock） | リクエスト毎に現在時刻（非推奨） |
 
-ブラウザのリロード **≠** RSS / API の再取得。更新は cron（または手動 snapshot）のみ。
+ブラウザのリロード **≠** RSS 再取得。
 
 ---
 
-## 5. 関連ファイル一覧
+## 5. GitHub Actions（手動バックアップ）
+
+[`.github/workflows/fetch-news.yml`](../.github/workflows/fetch-news.yml) — **`workflow_dispatch` のみ**。
+
+QStash 障害時の予備。Python `cron/main.py` を実行し `/api/revalidate` を呼ぶ。
+
+GitHub Secrets: `DEEPL_API_KEY`, `KV_*`, `REVALIDATE_SECRET`（任意: `DISCORD_WEBHOOK_URL`）
+
+---
+
+## 6. Python cron（レガシー）
+
+[`cron/main.py`](../cron/main.py) — ローカル実行・GHA 手動バックアップ用。  
+本番の定期実行は TypeScript（`lib/fetch-news.ts`）に移行済み。
+
+---
+
+## 7. 関連ファイル
 
 | パス | 説明 |
 |------|------|
-| `.github/workflows/fetch-news.yml` | 定期 cron + revalidate + 失敗通知 |
-| `app/api/revalidate/route.ts` | On-Demand ISR |
-| `cron/main.py` | 本番用バッチ（RSS → DeepL → KV） |
-| `cron/fetch_local.py` | ローカル用ワンショット取得 |
-| `cron/requirements.txt` | Python 依存 |
-| `app/page.tsx` | ISR `revalidate` |
-| `lib/kv.ts` | データ取得ロジック |
-| `.env.example` | 環境変数テンプレート |
+| `scripts/setup-qstash.mjs` | QStash スケジュール登録 |
+| `app/api/cron/fetch/route.ts` | QStash ワーカー |
+| `lib/fetch-news.ts` | RSS + DeepL + KV |
+| `lib/news-sources.ts` | 9カ国ソース定義 |
+| `.github/workflows/fetch-news.yml` | 手動バックアップ（Python） |
+| `cron/main.py` | Python 版（バックアップ） |
 
 ---
 
-## 6. 運用チェックリスト
+## 8. 運用チェックリスト
 
-- [ ] Vercel に Next.js をデプロイ、`KV_*` + `REVALIDATE_SECRET` を設定
-- [ ] Vercel KV（Upstash）ストアを作成
-- [ ] GitHub Secrets に `DEEPL_API_KEY`, `KV_*`, `REVALIDATE_SECRET` を設定
-- [ ] （任意）`DISCORD_WEBHOOK_URL` / `SLACK_WEBHOOK_URL` を設定
-- [ ] Actions → **Fetch news** → **Run workflow** で初回実行し KV にデータがあることを確認
-
-cron を一度も動かしていない場合、本番 UI は **mock 相当の空データ or 古い KV** になる。
+- [ ] Vercel に `DEEPL_API_KEY`, `KV_*`, `QSTASH_*_SIGNING_KEY` を設定して Redeploy
+- [ ] `npm run setup:qstash` でスケジュール登録
+- [ ] QStash Console で Trigger now → 本番「最終更新」が変わることを確認
+- [ ] （任意）Vercel に `DISCORD_WEBHOOK_URL` を設定
