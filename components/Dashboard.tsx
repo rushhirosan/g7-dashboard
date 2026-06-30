@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { NewsData, Lang } from "@/lib/types";
 import { TOTAL_COUNTRY_COUNT } from "@/lib/countries";
 import { Header } from "./Header";
+import { Footer } from "./Footer";
 import { CountryCard } from "./CountryCard";
 import { SkeletonCard } from "./SkeletonCard";
 
@@ -38,13 +39,7 @@ export function Dashboard({ data }: Props) {
         </div>
       </section>
 
-      <footer className="footer">
-        <a href="#">About</a>
-        <span aria-hidden="true">|</span>
-        <a href="#">Privacy</a>
-        <span aria-hidden="true">|</span>
-        <a href="#">Source Attribution</a>
-      </footer>
+      <Footer lang={lang} />
     </main>
   );
 }

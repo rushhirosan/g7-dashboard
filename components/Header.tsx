@@ -2,6 +2,7 @@
 
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import { getHeaderDescription } from "@/lib/site-info";
 import { Lang } from "@/lib/types";
 import { formatUpdatedAt } from "@/lib/utils";
 
@@ -31,6 +32,7 @@ export function Header({ lang, onLangChange, updatedAt }: Props) {
           <p className="subtitle">
             {lang === "ja" ? "G7 · 中国 · インド" : "G7 · China · India"}
           </p>
+          <p className="description">{getHeaderDescription(lang)}</p>
           <div className="updated">
             <span aria-hidden="true">◷</span>
             <time dateTime={updatedAt}>{formatUpdatedAt(updatedAt, lang)}</time>
