@@ -373,6 +373,13 @@ a.headline-title:hover {
 
 .footer button:hover { color: var(--text); }
 
+.footer a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.footer a:hover { color: var(--text); }
+
 /* ── Info modal ── */
 .info-modal {
   border: 0;

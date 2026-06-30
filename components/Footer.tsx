@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { getFooterLabel, InfoPanel } from "@/lib/site-info";
+import {
+  getFooterLabel,
+  getTrendsDashboardLabel,
+  InfoPanel,
+  TRENDS_DASHBOARD_URL,
+} from "@/lib/site-info";
 import { Lang } from "@/lib/types";
 import { InfoModal } from "./InfoModal";
 
@@ -25,6 +30,12 @@ export function Footer({ lang }: Props) {
             </button>
           </span>
         ))}
+        <span className="footer-item">
+          <span aria-hidden="true">|</span>
+          <a href={TRENDS_DASHBOARD_URL[lang]} target="_blank" rel="noopener noreferrer">
+            {getTrendsDashboardLabel(lang)} ↗
+          </a>
+        </span>
       </footer>
 
       <InfoModal panel={openPanel} lang={lang} onClose={() => setOpenPanel(null)} />

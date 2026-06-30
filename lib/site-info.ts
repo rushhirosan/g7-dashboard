@@ -17,6 +17,11 @@ export function getHeaderDescription(lang: Lang): string {
   return `Top headlines from major media across G7 countries, China, and India — in Japanese or English. Updated 4 times daily at ${scheduleLabel("en")}.`;
 }
 
+export const TRENDS_DASHBOARD_URL: Record<Lang, string> = {
+  ja: "https://trends-dashboard.fly.dev/",
+  en: "https://trends-dashboard.fly.dev/us",
+};
+
 export function getFooterLabel(panel: InfoPanel, lang: Lang): string {
   const labels: Record<InfoPanel, LocalizedString> = {
     about: { ja: "About", en: "About" },
@@ -24,6 +29,10 @@ export function getFooterLabel(panel: InfoPanel, lang: Lang): string {
     sources: { ja: "Source Attribution", en: "Source Attribution" },
   };
   return labels[panel][lang];
+}
+
+export function getTrendsDashboardLabel(lang: Lang): string {
+  return lang === "ja" ? "トレンドダッシュボード" : "Trends Dashboard";
 }
 
 export function getInfoPanelTitle(panel: InfoPanel, lang: Lang): string {
@@ -61,14 +70,14 @@ export function getInfoPanelParagraphs(panel: InfoPanel, lang: Lang): string[] {
           "ライト / ダークモードの設定は、お使いのブラウザのローカルストレージに保存されます。",
           "見出しやメディア名のリンクをクリックすると、NHK・BBC など外部サイトへ移動します。それぞれのサイトには独自のプライバシーポリシーが適用されます。",
           "ニュース取得・翻訳・保存はサーバー側で行われ、訪問者のブラウザから RSS や DeepL API へ直接アクセスすることはありません。",
-          "本サイトではアクセス解析用のトラッキング Cookie は使用していません。",
+          "アクセス解析に Google Analytics 4（GA4）を使用しています。Google Analytics は Cookie を使用し、匿名の利用状況データを収集します。詳細は Google のプライバシーポリシー（https://policies.google.com/privacy）をご覧ください。",
         ]
       : [
           "No account or login is required. We do not collect personal information such as names or email addresses.",
           "Your light / dark theme preference is stored in your browser’s local storage.",
           "Clicking headline or media links takes you to external sites (e.g. NHK, BBC), each governed by its own privacy policy.",
           "News fetching, translation, and storage run on the server. Your browser does not contact RSS feeds or the DeepL API directly.",
-          "This site does not use tracking cookies for analytics.",
+          "We use Google Analytics 4 (GA4) for traffic analysis. Google Analytics uses cookies to collect anonymous usage data. See Google’s privacy policy at https://policies.google.com/privacy.",
         ];
   }
 
