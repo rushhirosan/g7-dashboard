@@ -141,7 +141,7 @@ SOURCES = [
             "url": "https://www.scmp.com",
             "originalLang": {"ja": "英語", "en": "English"},
         },
-        "rss": "https://www.scmp.com/rss/91/feed",
+        "rss": "https://www.scmp.com/rss/91/feed/",
         "lang": "EN",
     },
     {
@@ -186,6 +186,24 @@ RSS_FALLBACKS: dict[str, list[dict]] = {
             "source": {
                 "name": "The Globe and Mail",
                 "url": "https://www.theglobeandmail.com/canada/",
+                "originalLang": {"ja": "英語", "en": "English"},
+            },
+        },
+    ],
+    "cn": [
+        {
+            "rss": "https://www.scmp.com/rss/4/feed/",
+            "source": {
+                "name": "SCMP",
+                "url": "https://www.scmp.com/news/china",
+                "originalLang": {"ja": "英語", "en": "English"},
+            },
+        },
+        {
+            "rss": "https://feeds.bbci.co.uk/news/world/asia/china/rss.xml",
+            "source": {
+                "name": "BBC",
+                "url": "https://www.bbc.com/news/world/asia/china",
                 "originalLang": {"ja": "英語", "en": "English"},
             },
         },
