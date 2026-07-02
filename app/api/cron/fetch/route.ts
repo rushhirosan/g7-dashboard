@@ -2,7 +2,7 @@ import { Receiver } from "@upstash/qstash";
 import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { fetchAndStoreNews } from "@/lib/fetch-news";
-import { notifyDiscordFailure } from "@/lib/notify-discord";
+import { notifyDiscordFailure, notifyDiscordSuccess } from "@/lib/notify-discord";
 
 export const maxDuration = 300;
 
@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
   try {
     const result = await fetchAndStoreNews();
     revalidatePath("/");
+    await notifyDiscordSuccess(result);
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
