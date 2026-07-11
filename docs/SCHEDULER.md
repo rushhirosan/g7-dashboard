@@ -74,7 +74,7 @@ CRON_TZ=Asia/Tokyo 0 1,7,13,19 * * *
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | KV 読み書き（Redis 連携で自動設定可） |
 | `QSTASH_CURRENT_SIGNING_KEY` | QStash 署名検証 |
 | `QSTASH_NEXT_SIGNING_KEY` | QStash 署名検証（ローテーション用） |
-| `DISCORD_WEBHOOK_URL` | 任意 — cron 成功・失敗時 Discord 通知 |
+| `DISCORD_WEBHOOK_URL` | 任意 — cron 失敗・部分取得時 Discord 通知 |
 
 設定後 **Redeploy**。
 
@@ -104,7 +104,8 @@ QStash Console → Schedules → 対象スケジュール → **Trigger now**
 
 - QStash からのみ受け付け（`verifySignatureAppRouter`）
 - RSS 取得 → DeepL → KV 書込 → `revalidatePath("/")`
-- 成功時: Discord 通知（国数・更新時刻・サイト URL、Webhook 設定時）
+- 全件成功時: Discord 通知なし
+- 部分取得成功時: Discord 通知（国数・更新時刻・サイト URL、Webhook 設定時）
 - 失敗時: HTTP 500 + Discord 通知（Webhook 設定時）
 - `maxDuration = 300`（9カ国並列取得のため Pro 推奨）
 

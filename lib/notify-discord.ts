@@ -39,18 +39,16 @@ function formatUpdatedAtJst(iso: string): string {
   });
 }
 
-export async function notifyDiscordSuccess(result: FetchNewsResult): Promise<void> {
-  const siteUrl = getSiteUrl();
-  const allCountries = result.countriesWritten === result.totalSources;
+export async function notifyDiscordPartialFetch(result: FetchNewsResult): Promise<void> {
+  if (result.countriesWritten === result.totalSources) return;
 
+  const siteUrl = getSiteUrl();
   await postDiscordWebhook({
-    content: allCountries
-      ? "✅ World Front Page cron succeeded"
-      : "⚠️ World Front Page cron succeeded with partial data",
+    content: "⚠️ World Front Page cron succeeded with partial data",
     embeds: [
       {
-        title: "Fetch news completed",
-        color: allCountries ? 5763719 : 16763904,
+        title: "Fetch news completed with partial data",
+        color: 16763904,
         fields: [
           {
             name: "Countries",

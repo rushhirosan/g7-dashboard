@@ -51,12 +51,12 @@ jobs:
           base="${SITE_URL:-https://g7-dashboard.vercel.app}"
           curl -sf -X POST "${base}/api/revalidate?secret=${REVALIDATE_SECRET}"
 
-  notify-success:
+  notify-partial:
     runs-on: ubuntu-latest
     needs: fetch
     if: success()
     steps:
-      - name: Notify Discord
+      - name: Notify Discord (partial data only)
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           SUMMARY: ${{ needs.fetch.outputs.summary }}
@@ -66,16 +66,26 @@ jobs:
             echo "DISCORD_WEBHOOK_URL not set — skipping"
             exit 0
           fi
+          if ! echo "$SUMMARY" | grep -qE 'Done: [0-9]+/[0-9]+ countries written'; then
+            echo "Could not parse country count — skipping Discord notification"
+            exit 0
+          fi
+          written=$(echo "$SUMMARY" | sed -nE 's/.*Done: ([0-9]+)\/([0-9]+) countries written.*/\1/p')
+          total=$(echo "$SUMMARY" | sed -nE 's/.*Done: ([0-9]+)\/([0-9]+) countries written.*/\2/p')
+          if [ "$written" = "$total" ]; then
+            echo "All countries written — skipping Discord notification"
+            exit 0
+          fi
           site="${SITE_URL:-https://g7-dashboard.vercel.app}"
           payload=$(jq -n \
-            --arg content "✅ World Front Page cron succeeded (GitHub Actions)" \
+            --arg content "⚠️ World Front Page cron succeeded with partial data (GitHub Actions)" \
             --arg summary "$SUMMARY" \
             --arg site "$site" \
             '{
               content: $content,
               embeds: [{
-                title: "Fetch news completed",
-                color: 5763719,
+                title: "Fetch news completed with partial data",
+                color: 16763904,
                 fields: [
                   { name: "Result", value: $summary, inline: true },
                   { name: "Site", value: $site, inline: false }
