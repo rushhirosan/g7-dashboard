@@ -1,0 +1,88 @@
+---
+description: World Front Page (g7-dashboard) — product principles, stack, architecture, and development conventions
+alwaysApply: true
+---
+
+# Project: World Front Page (g7-dashboard)
+
+## Project Overview
+- G7 + major economies (9 countries) news dashboard: top headlines in **Japanese / English**
+- Host **titles only** — link out to original articles; no article body storage
+- Single-page Next.js app on **Vercel**; data in **Vercel KV**
+- Scheduled refresh via **Upstash QStash** → `POST /api/cron/fetch`
+- Sister site: [Trend Dashboard](https://trends-dashboard.fly.dev/) (separate repo)
+
+## Product Principles
+- Fast scan: users grasp "today's world" in one screen
+- Clarity over completeness; usefulness over feature count
+- RSS / public feeds only — **no scraping**
+- Treat external feeds as unreliable; handle partial failure gracefully
+- Avoid feature creep; keep the product lightweight
+
+## Tech Stack
+- **Frontend**: Next.js 15 (App Router), React 19, Tailwind CSS, next-themes
+- **Data**: Vercel KV (`@vercel/kv`), ISR `revalidate = 21600`
+- **Fetch (prod)**: TypeScript `lib/fetch-news.ts` (RSS → DeepL → KV)
+- **Fetch (backup/dev)**: Python `cron/main.py`, `npm run fetch:snapshot`
+- **Scheduler**: Upstash QStash (JST 01/07/13/19)
+- **Deploy**: Vercel (push to `main` auto-deploys)
+
+## Architecture
+
+```
+QStash → POST /api/cron/fetch → lib/fetch-news.ts → KV (news:latest)
+                                                          ↓
+                                              app/page.tsx → Dashboard
+```
+
+| Layer | Path | Role |
+|-------|------|------|
+| Pages | `app/` | App Router, layout, metadata, sitemap/robots |
+| API | `app/api/cron/fetch/`, `app/api/revalidate/` | QStash cron, legacy ISR revalidate |
+| UI | `components/` | Dashboard, Header, CountryCard, Footer, modals |
+| Core | `lib/` | fetch-news, news-sources, kv, types, notify-discord |
+| Backup cron | `cron/` | Python RSS batch (GitHub Actions manual backup) |
+| Docs | `docs/SPEC.md`, `docs/SCHEDULER.md` | Product and ops spec |
+
+## UI / UX Rules
+- Single page `/` — 9 country cards in a responsive grid (3 cols desktop, 1 col mobile)
+- Bilingual UI via client `lang` state (`ja` / `en`); no URL-based i18n
+- Light/dark via `next-themes`; explicit toggle, not system-only
+- Prefer Tailwind utilities and existing CSS classes in `app/globals.css`
+- Keep loading skeletons and `aria-live` for accessibility
+- Practical UI tweaks over flashy redesigns
+
+## News Pipeline Rules
+- Source config lives in `lib/news-sources.ts` — keep TS and Python `cron/` in sync when adding/changing feeds
+- Use **fallback RSS URLs** (`RSS_FALLBACKS`) when primary feeds fail (HTTP redirects, timeouts)
+- DeepL translates titles only; respect rate limits and timeouts
+- Discord notifications: **failure and partial fetch only** — skip full success (`lib/notify-discord.ts`)
+- Log fetch outcomes; do not silently swallow country-level failures
+
+## Coding Conventions
+- TypeScript: `PascalCase` components, `camelCase` functions, `@/` path alias
+- Python cron: `snake_case`, shared logic with `fetch_local.py` where possible
+- Minimize diff scope; match existing patterns in touched files
+- Comments explain *why* (feed quirks, redirect issues), not *what*
+- Do not commit `.env.local`, `data/news-snapshot.json`, `.next/`, `tsconfig.tsbuildinfo`
+
+## Error Handling
+- Assume RSS feeds can fail, redirect, or return empty items
+- Partial country success is acceptable; full cron failure throws and notifies Discord
+- KV read failures on build: degrade gracefully (empty/mock path in dev)
+
+## Security
+- Never commit secrets; env vars via Vercel / `.env.local`
+- QStash routes require signature verification (`QSTASH_*_SIGNING_KEY`)
+- Check `git diff` before commit; run `./scripts/release.sh` before ship
+
+## AI Development Rules
+- Read `docs/SPEC.md` and `docs/SCHEDULER.md` before changing fetch or scheduler behavior
+- When editing feeds, update both `lib/news-sources.ts` and `cron/main.py` if applicable
+- Prefer small diffs; do not add heavy dependencies without justification
+- Propose commit message in English; do not commit unless user asks or `/release --ship`
+
+## Pre-Ship Checklist
+- `npx tsc --noEmit` and `npm run build` pass
+- No secrets in diff
+- Discord/scheduler docs updated if notification or cron behavior changed
