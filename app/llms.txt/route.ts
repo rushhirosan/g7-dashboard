@@ -17,22 +17,27 @@ export async function GET() {
     "# World Front Page",
     "",
     `> ${getHeaderDescription("en")}`,
+    `> ${getHeaderDescription("ja")}`,
     "",
     `Site: ${siteUrl}`,
     `Last updated: ${data.updatedAt}`,
     "",
-    "This site hosts headline titles only and links out to the original articles on each source.",
+    "This site hosts headline titles only (bilingual: English / Japanese) and links out to the original articles on each source.",
+    "本サイトは見出しタイトルのみ（英語・日本語）を掲載し、各ソースの元記事へリンクします。",
     "",
-    "## Today's headlines by country",
+    "## Today's headlines by country / 国別トップ見出し",
     "",
   ];
 
   for (const country of data.countries ?? []) {
-    lines.push(`### ${country.name.en} (${country.name.ja}) — ${country.source.name}`);
+    lines.push(`### ${country.name.en} / ${country.name.ja} — ${country.source.name}`);
     lines.push("");
     country.headlines.forEach((h, i) => {
-      const title = h.title.en || h.title.original;
-      lines.push(`${i + 1}. [${title}](${h.url})`);
+      const en = h.title.en || h.title.original;
+      lines.push(`${i + 1}. [${en}](${h.url})`);
+      if (h.title.ja && h.title.ja !== en) {
+        lines.push(`   - ja: ${h.title.ja}`);
+      }
     });
     lines.push("");
   }
