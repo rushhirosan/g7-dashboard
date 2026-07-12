@@ -13,15 +13,17 @@ interface Props {
 }
 
 export function Dashboard({ data }: Props) {
+  // Default to "ja" so server HTML and first client render match (hydration-safe);
+  // language auto-detection flips text after mount without hiding content from crawlers.
   const [lang, setLang] = useState<Lang>("ja");
-  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (navigator.language.toLowerCase().startsWith("en")) {
       setLang("en");
     }
-    setReady(true);
   }, []);
+
+  const countries = data.countries ?? [];
 
   return (
     <main className="page">
@@ -29,11 +31,11 @@ export function Dashboard({ data }: Props) {
 
       <section className="country-section" aria-live="polite" aria-label="Country news">
         <div className="grid">
-          {!ready
+          {countries.length === 0
             ? Array.from({ length: TOTAL_COUNTRY_COUNT }).map((_, i) => (
                 <SkeletonCard key={i} />
               ))
-            : (data.countries ?? []).map((country, i) => (
+            : countries.map((country, i) => (
                 <CountryCard key={country.code} country={country} lang={lang} index={i} />
               ))}
         </div>
