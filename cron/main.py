@@ -64,12 +64,13 @@ SOURCES = [
         "code": "us",
         "flag": "🇺🇸",
         "name": {"ja": "アメリカ", "en": "United States"},
+        # NPR primary — feeds.apnews.com often fails DNS from serverless
         "source": {
-            "name": "AP News",
-            "url": "https://apnews.com",
+            "name": "NPR",
+            "url": "https://www.npr.org",
             "originalLang": {"ja": "英語", "en": "English"},
         },
-        "rss": "https://feeds.apnews.com/rss/apf-topnews",
+        "rss": "https://feeds.npr.org/1001/rss.xml",
         "lang": "EN",
     },
     {
@@ -124,12 +125,13 @@ SOURCES = [
         "code": "ca",
         "flag": "🇨🇦",
         "name": {"ja": "カナダ", "en": "Canada"},
+        # Globe primary — CBC feed frequently times out before fallbacks run
         "source": {
-            "name": "CBC",
-            "url": "https://www.cbc.ca",
+            "name": "The Globe and Mail",
+            "url": "https://www.theglobeandmail.com/canada/",
             "originalLang": {"ja": "英語", "en": "English"},
         },
-        "rss": "https://www.cbc.ca/webfeed/rss/rss-topstories",
+        "rss": "https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/canada/",
         "lang": "EN",
     },
     {
@@ -158,7 +160,7 @@ SOURCES = [
     },
 ]
 
-RSS_FETCH_TIMEOUT = 60
+RSS_FETCH_TIMEOUT = 20
 
 # Used when primary RSS fails (e.g. AP DNS, CBC timeout)
 RSS_FALLBACKS: dict[str, list[dict]] = {
@@ -172,20 +174,20 @@ RSS_FALLBACKS: dict[str, list[dict]] = {
             },
         },
         {
-            "rss": "https://feeds.npr.org/1001/rss.xml",
+            "rss": "https://feeds.apnews.com/rss/apf-topnews",
             "source": {
-                "name": "NPR",
-                "url": "https://www.npr.org",
+                "name": "AP News",
+                "url": "https://apnews.com",
                 "originalLang": {"ja": "英語", "en": "English"},
             },
         },
     ],
     "ca": [
         {
-            "rss": "https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/canada/",
+            "rss": "https://www.cbc.ca/webfeed/rss/rss-topstories",
             "source": {
-                "name": "The Globe and Mail",
-                "url": "https://www.theglobeandmail.com/canada/",
+                "name": "CBC",
+                "url": "https://www.cbc.ca",
                 "originalLang": {"ja": "英語", "en": "English"},
             },
         },

@@ -1,5 +1,7 @@
 import { Lang } from "./types";
 
+const JST = "Asia/Tokyo";
+
 export function relativeTime(isoString: string, lang: Lang): string {
   const diff = Math.max(0, Math.floor((Date.now() - new Date(isoString).getTime()) / 60000));
   if (lang === "ja") {
@@ -15,17 +17,27 @@ export function relativeTime(isoString: string, lang: Lang): string {
 export function formatUpdatedAt(isoString: string, lang: Lang): string {
   const d = new Date(isoString);
   if (lang === "ja") {
-    const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
-    const m = d.getMonth() + 1;
-    const day = d.getDate();
-    const wd = weekdays[d.getDay()];
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mm = String(d.getMinutes()).padStart(2, "0");
-    return `最終更新：${m}月${day}日（${wd}）${hh}:${mm} JST`;
+    const parts = new Intl.DateTimeFormat("ja-JP", {
+      timeZone: JST,
+      month: "numeric",
+      day: "numeric",
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(d);
+    const get = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((p) => p.type === type)?.value ?? "";
+    return `最終更新：${get("month")}月${get("day")}日（${get("weekday")}）${get("hour")}:${get("minute")} JST`;
   }
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const weekdays = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `Last updated: ${months[d.getMonth()]} ${d.getDate()} (${weekdays[d.getDay()]}) ${hh}:${mm} JST`;
+  const formatted = new Intl.DateTimeFormat("en-US", {
+    timeZone: JST,
+    month: "short",
+    day: "numeric",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+  return `Last updated: ${formatted} JST`;
 }

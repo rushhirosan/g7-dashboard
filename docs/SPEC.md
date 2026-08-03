@@ -167,15 +167,14 @@ DeepL エンドポイント: `https://api-free.deepl.com/v2/translate`（Develop
 | code | 国 | メディア | RSS |
 |------|-----|---------|-----|
 | jp | 日本 | NHK | `https://www3.nhk.or.jp/rss/news/cat0.xml` |
-| us | アメリカ | AP News | `https://feeds.apnews.com/rss/apf-topnews` |
+| us | アメリカ | NPR（fallback: BBC / AP） | `https://feeds.npr.org/1001/rss.xml` |
 | gb | イギリス | BBC | `http://feeds.bbci.co.uk/news/rss.xml` |
 | de | ドイツ | Deutsche Welle | `https://rss.dw.com/rdf/rss-en-top` |
 | fr | フランス | Le Monde | `https://www.lemonde.fr/rss/une.xml` |
 | it | イタリア | ANSA | `https://www.ansa.it/sito/notizie/topnews/topnews_rss.xml` |
-| ca | カナダ | CBC | `https://www.cbc.ca/webfeed/rss/rss-topstories` |
+| ca | カナダ | The Globe and Mail（fallback: CBC） | `https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/canada/` |
 
-定義の正: `cron/main.py` の `SOURCES`。  
-ローカル `fetch_local.py` は取得失敗時に代替 RSS を使用（本番 cron とは異なる場合あり）。
+定義の正: `lib/news-sources.ts`（本番 TS cron）と `cron/main.py`（バックアップ）を同期。
 
 ---
 
@@ -185,10 +184,10 @@ DeepL エンドポイント: `https://api-free.deepl.com/v2/translate`（Develop
 
 | 関数 | 用途 |
 |------|------|
-| `formatUpdatedAt` | 最終更新（JST、曜日付き） |
-| `relativeTime` | 各見出しの経過時間 |
+| `formatUpdatedAt` | 最終更新（**Asia/Tokyo** 固定、曜日付き） |
+| `relativeTime` | 各見出しの経過時間（相対） |
 
-いずれも **クライアント / サーバーのローカルタイムゾーン** で `Date` を解釈。JST 表記ラベルは固定。
+`formatUpdatedAt` はサーバー／クライアント問わず **JST** で表示する。
 
 ### 5.2 言語切替
 

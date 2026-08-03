@@ -25,7 +25,19 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function translate(
+/** Serialize DeepL calls — free tier rejects concurrent bursts with 429. */
+let deeplChain: Promise<unknown> = Promise.resolve();
+
+function enqueueDeepL<T>(fn: () => Promise<T>): Promise<T> {
+  const run = deeplChain.then(fn, fn);
+  deeplChain = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
+
+async function translateOnce(
   texts: string[],
   targetLang: string,
   apiKey: string
@@ -44,6 +56,29 @@ async function translate(
   }
   const data = (await resp.json()) as { translations: { text: string }[] };
   return data.translations.map((t) => t.text);
+}
+
+async function translate(
+  texts: string[],
+  targetLang: string,
+  apiKey: string
+): Promise<string[]> {
+  return enqueueDeepL(async () => {
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await translateOnce(texts, targetLang, apiKey);
+      } catch (err) {
+        lastErr = err;
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!msg.includes("DeepL HTTP 429") && !msg.includes("DeepL HTTP 5")) {
+          throw err;
+        }
+        await sleep(1000 * (attempt + 1));
+      }
+    }
+    throw lastErr;
+  });
 }
 
 async function fetchRss(url: string, limit = 5): Promise<RssEntry[]> {
@@ -104,7 +139,6 @@ async function processCountry(
     enTitles = titles;
   } else {
     jaTitles = await translate(titles, "JA", deeplKey);
-    await sleep(500);
     enTitles = await translate(titles, "EN-US", deeplKey);
   }
 
@@ -142,22 +176,28 @@ export async function fetchAndStoreNews(): Promise<FetchNewsResult> {
   console.info("[fetch-news] === World Front Page cron started ===");
 
   const settled = await Promise.allSettled(
-    NEWS_SOURCES.map((src, index) =>
-      sleep(index * 100).then(() => processCountry(src, deeplKey))
-    )
+    NEWS_SOURCES.map((src) => processCountry(src, deeplKey))
   );
 
   const countries: CountryNews[] = [];
-  for (const result of settled) {
+  const failures: string[] = [];
+  for (let i = 0; i < settled.length; i++) {
+    const result = settled[i];
+    const code = NEWS_SOURCES[i].code;
     if (result.status === "fulfilled" && result.value) {
       countries.push(result.value);
     } else if (result.status === "rejected") {
-      console.error("[fetch-news] Country failed:", result.reason);
+      const reason = result.reason instanceof Error ? result.reason.message : String(result.reason);
+      console.error(`[fetch-news] Country failed ${code}:`, result.reason);
+      failures.push(`${code}: ${reason}`);
+    } else {
+      failures.push(`${code}: no entries`);
     }
   }
 
   if (countries.length === 0) {
-    throw new Error("Nothing processed — aborting KV write");
+    const detail = failures.length > 0 ? ` (${failures.join("; ")})` : "";
+    throw new Error(`Nothing processed — aborting KV write${detail}`);
   }
 
   countries.sort(

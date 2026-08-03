@@ -20,7 +20,8 @@ export type RssFallback = {
   source: NewsSourceConfig["source"];
 };
 
-export const RSS_FETCH_TIMEOUT_MS = 60_000;
+// Per-candidate timeout; keep short so flaky primaries fail over quickly
+export const RSS_FETCH_TIMEOUT_MS = 20_000;
 
 export const NEWS_SOURCES: NewsSourceConfig[] = [
   {
@@ -39,12 +40,13 @@ export const NEWS_SOURCES: NewsSourceConfig[] = [
     code: "us",
     flag: "🇺🇸",
     name: { ja: "アメリカ", en: "United States" },
+    // NPR primary — feeds.apnews.com often fails DNS from serverless
     source: {
-      name: "AP News",
-      url: "https://apnews.com",
+      name: "NPR",
+      url: "https://www.npr.org",
       originalLang: { ja: "英語", en: "English" },
     },
-    rss: "https://feeds.apnews.com/rss/apf-topnews",
+    rss: "https://feeds.npr.org/1001/rss.xml",
     lang: "EN",
   },
   {
@@ -99,12 +101,13 @@ export const NEWS_SOURCES: NewsSourceConfig[] = [
     code: "ca",
     flag: "🇨🇦",
     name: { ja: "カナダ", en: "Canada" },
+    // Globe primary — CBC feed frequently times out before fallbacks run
     source: {
-      name: "CBC",
-      url: "https://www.cbc.ca",
+      name: "The Globe and Mail",
+      url: "https://www.theglobeandmail.com/canada/",
       originalLang: { ja: "英語", en: "English" },
     },
-    rss: "https://www.cbc.ca/webfeed/rss/rss-topstories",
+    rss: "https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/canada/",
     lang: "EN",
   },
   {
@@ -144,20 +147,20 @@ export const RSS_FALLBACKS: Record<string, RssFallback[]> = {
       },
     },
     {
-      rss: "https://feeds.npr.org/1001/rss.xml",
+      rss: "https://feeds.apnews.com/rss/apf-topnews",
       source: {
-        name: "NPR",
-        url: "https://www.npr.org",
+        name: "AP News",
+        url: "https://apnews.com",
         originalLang: { ja: "英語", en: "English" },
       },
     },
   ],
   ca: [
     {
-      rss: "https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/canada/",
+      rss: "https://www.cbc.ca/webfeed/rss/rss-topstories",
       source: {
-        name: "The Globe and Mail",
-        url: "https://www.theglobeandmail.com/canada/",
+        name: "CBC",
+        url: "https://www.cbc.ca",
         originalLang: { ja: "英語", en: "English" },
       },
     },
