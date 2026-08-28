@@ -23,7 +23,8 @@ QStash (JST 01/07/13/19)
 | `app/api/cron/fetch/route.ts` | QStash entry, maxDuration 300 |
 | `lib/fetch-news.ts` | Parallel per-country fetch, DeepL, KV write |
 | `lib/news-sources.ts` | `NEWS_SOURCES`, `RSS_FALLBACKS`, timeouts |
-| `lib/notify-discord.ts` | Alert on **partial** or **failure** only — not full success |
+| `lib/translation-cache.ts` | KV cache of translated titles (`news:tx-cache`, 7d) |
+| `lib/notify-discord.ts` | Alert on **partial**, **degraded** or **failure** only — not full success |
 | `lib/kv.ts` | KV helpers |
 
 ## Backup / dev paths
@@ -48,13 +49,18 @@ QStash (JST 01/07/13/19)
 - Top **5** headlines per country
 - Countries fetched in parallel; missing countries reduce `countriesWritten` but don't fail the whole job unless nothing is written
 - DeepL: titles only; requires `DEEPL_API_KEY` in Vercel Production
+- Endpoint auto-selected: `:fx` key → api-free, otherwise → api.deepl.com (Pro)
+- Translations cached in KV; only new titles are billed. Free tier is 500k chars/month and
+  uncached usage measures ~495k/month, so the cache is what keeps the job inside the quota
+- DeepL failure never drops a country — titles fall back to the source language (`translationDegraded`)
 
 ## Discord notification policy
 
 | Outcome | Notify? |
 |---------|---------|
-| All countries written | No |
+| All countries written, translations OK | No |
 | Partial (e.g. 7/9) | Yes ⚠️ |
+| 9/9 but translations degraded | Yes ⚠️ — throttled to once/24h via `news:tx-degraded-alert` |
 | Complete failure (exception) | Yes ❌ |
 
 GitHub Actions backup mirrors this in `.github/workflows/fetch-news.yml` (`notify-partial`, `notify-failure`).

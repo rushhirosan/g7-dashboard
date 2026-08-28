@@ -39,9 +39,29 @@ function formatUpdatedAtJst(iso: string): string {
   });
 }
 
+/**
+ * A drained DeepL quota stays drained until the monthly reset, so alerting on
+ * every 6h run is pure noise. Partial-country alerts are not throttled.
+ */
+async function shouldAlertDegradedTranslation(): Promise<boolean> {
+  const key = "news:tx-degraded-alert";
+  try {
+    const { kv } = await import("@vercel/kv");
+    const alreadyAlerted = await kv.set(key, Date.now(), { nx: true, ex: 86_400 });
+    if (alreadyAlerted === null) {
+      console.info("[notify-discord] Degraded-translation alert throttled (already sent today)");
+      return false;
+    }
+  } catch (err) {
+    console.warn("[notify-discord] Throttle check failed, alerting anyway:", err);
+  }
+  return true;
+}
+
 export async function notifyDiscordPartialFetch(result: FetchNewsResult): Promise<void> {
   const partial = result.countriesWritten < result.totalSources;
   if (!partial && !result.translationDegraded) return;
+  if (!partial && !(await shouldAlertDegradedTranslation())) return;
 
   const siteUrl = getSiteUrl();
   const fields = [

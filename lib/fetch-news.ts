@@ -6,6 +6,13 @@ import {
   RSS_FALLBACKS,
   RSS_FETCH_TIMEOUT_MS,
 } from "./news-sources";
+import {
+  getCached,
+  loadTranslationCache,
+  putCached,
+  saveTranslationCache,
+  TranslationCache,
+} from "./translation-cache";
 
 const USER_AGENT = "g7-dashboard/0.1 (+https://github.com/g7-dashboard)";
 
@@ -87,20 +94,37 @@ async function translate(
   });
 }
 
-/** On quota/outage, keep headlines in the source language rather than dropping the country. */
-async function translateOrFallback(
+/**
+ * Translates only titles missing from the cache. On quota/outage, keeps
+ * headlines in the source language rather than dropping the country.
+ */
+export async function translateOrFallback(
   texts: string[],
   targetLang: string,
   apiKey: string,
-  fallback: string[]
+  cache: TranslationCache
 ): Promise<{ texts: string[]; degraded: boolean }> {
+  const results: (string | null)[] = texts.map((text) => getCached(cache, targetLang, text));
+
+  const missingIndexes = results.flatMap((r, i) => (r === null ? [i] : []));
+  if (missingIndexes.length === 0) {
+    return { texts: results as string[], degraded: false };
+  }
+
+  const missingTexts = missingIndexes.map((i) => texts[i]);
   try {
-    const translated = await translate(texts, targetLang, apiKey);
-    return { texts: translated, degraded: false };
+    const translated = await translate(missingTexts, targetLang, apiKey);
+    missingIndexes.forEach((originalIndex, n) => {
+      const text = translated[n];
+      if (text === undefined) return;
+      results[originalIndex] = text;
+      putCached(cache, targetLang, texts[originalIndex], text);
+    });
+    return { texts: results.map((r, i) => r ?? texts[i]), degraded: false };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[fetch-news] DeepL ${targetLang} unavailable, using source titles: ${msg}`);
-    return { texts: fallback, degraded: true };
+    return { texts: results.map((r, i) => r ?? texts[i]), degraded: true };
   }
 }
 
@@ -146,7 +170,8 @@ type ProcessCountryResult = {
 
 async function processCountry(
   src: NewsSourceConfig,
-  deeplKey: string
+  deeplKey: string,
+  cache: TranslationCache
 ): Promise<ProcessCountryResult | null> {
   console.info(`[fetch-news] Processing ${src.code} (${src.source.name})...`);
   const { entries, source } = await fetchRssForCountry(src);
@@ -162,19 +187,19 @@ async function processCountry(
 
   if (src.lang === "JA") {
     jaTitles = titles;
-    const en = await translateOrFallback(titles, "EN-US", deeplKey, titles);
+    const en = await translateOrFallback(titles, "EN-US", deeplKey, cache);
     enTitles = en.texts;
     translationDegraded ||= en.degraded;
   } else if (src.lang === "EN") {
-    const ja = await translateOrFallback(titles, "JA", deeplKey, titles);
+    const ja = await translateOrFallback(titles, "JA", deeplKey, cache);
     jaTitles = ja.texts;
     translationDegraded ||= ja.degraded;
     enTitles = titles;
   } else {
-    const ja = await translateOrFallback(titles, "JA", deeplKey, titles);
+    const ja = await translateOrFallback(titles, "JA", deeplKey, cache);
     jaTitles = ja.texts;
     translationDegraded ||= ja.degraded;
-    const en = await translateOrFallback(titles, "EN-US", deeplKey, titles);
+    const en = await translateOrFallback(titles, "EN-US", deeplKey, cache);
     enTitles = en.texts;
     translationDegraded ||= en.degraded;
   }
@@ -216,8 +241,10 @@ export async function fetchAndStoreNews(): Promise<FetchNewsResult> {
 
   console.info("[fetch-news] === World Front Page cron started ===");
 
+  const cache = await loadTranslationCache();
+
   const settled = await Promise.allSettled(
-    NEWS_SOURCES.map((src) => processCountry(src, deeplKey))
+    NEWS_SOURCES.map((src) => processCountry(src, deeplKey, cache))
   );
 
   const countries: CountryNews[] = [];
@@ -256,6 +283,7 @@ export async function fetchAndStoreNews(): Promise<FetchNewsResult> {
 
   const { kv } = await import("@vercel/kv");
   await kv.set("news:latest", payload);
+  await saveTranslationCache(cache);
 
   console.info(
     `[fetch-news] === Done: ${countries.length}/${NEWS_SOURCES.length} countries written ===`

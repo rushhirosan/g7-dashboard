@@ -160,7 +160,23 @@ Headline {
 | EN（米英独加等） | DeepL → JA | 原文 |
 | FR / IT | DeepL → JA | DeepL → EN |
 
-DeepL エンドポイント: `https://api-free.deepl.com/v2/translate`（Developer 無料枠）
+DeepL エンドポイント: API キーが `:fx` で終わる場合は `https://api-free.deepl.com/v2/translate`（無料枠）、
+それ以外は `https://api.deepl.com/v2/translate`（Pro）を自動選択。
+
+#### 翻訳キャッシュ（`lib/translation-cache.ts`）
+
+cron は 6 時間ごとに走るが見出しの入れ替わりは緩やかなため、無料枠 50 万文字/月では
+毎回全件翻訳すると月末に枯渇する（実測 約 49.5 万文字/月 = 98.9%）。
+
+- KV キー `news:tx-cache` に `原文 → 訳文` を保存（保持期間 7 日）
+- キャッシュヒットした見出しは DeepL を呼ばない
+- 消費量の見積り: `npx tsx scripts/deepl-usage-estimate.mjs`
+
+#### DeepL 障害・クォータ超過時（degraded）
+
+- 翻訳に失敗しても国データは破棄せず、**原文のまま**保存する（`countriesWritten` は減らない）
+- キャッシュ済みの見出しは訳文を維持し、新規見出しのみ原文になる
+- Discord には degraded を通知するが、KV キー `news:tx-degraded-alert` で **1 日 1 回**に制限
 
 ### 4.5 ニュースソース（G7）
 
