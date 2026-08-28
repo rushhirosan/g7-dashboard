@@ -40,32 +40,47 @@ function formatUpdatedAtJst(iso: string): string {
 }
 
 export async function notifyDiscordPartialFetch(result: FetchNewsResult): Promise<void> {
-  if (result.countriesWritten === result.totalSources) return;
+  const partial = result.countriesWritten < result.totalSources;
+  if (!partial && !result.translationDegraded) return;
 
   const siteUrl = getSiteUrl();
+  const fields = [
+    {
+      name: "Countries",
+      value: `${result.countriesWritten}/${result.totalSources}`,
+      inline: true,
+    },
+    {
+      name: "Updated (JST)",
+      value: formatUpdatedAtJst(result.updatedAt),
+      inline: true,
+    },
+    {
+      name: "Site",
+      value: siteUrl,
+      inline: false,
+    },
+  ];
+
+  if (result.translationDegraded) {
+    fields.push({
+      name: "Translation",
+      value: "DeepL unavailable — some titles kept in source language (check quota or API key)",
+      inline: false,
+    });
+  }
+
   await postDiscordWebhook({
-    content: "⚠️ World Front Page cron succeeded with partial data",
+    content: partial
+      ? "⚠️ World Front Page cron succeeded with partial data"
+      : "⚠️ World Front Page cron completed with degraded translations",
     embeds: [
       {
-        title: "Fetch news completed with partial data",
+        title: partial
+          ? "Fetch news completed with partial data"
+          : "Fetch news completed with degraded translations",
         color: 16763904,
-        fields: [
-          {
-            name: "Countries",
-            value: `${result.countriesWritten}/${result.totalSources}`,
-            inline: true,
-          },
-          {
-            name: "Updated (JST)",
-            value: formatUpdatedAtJst(result.updatedAt),
-            inline: true,
-          },
-          {
-            name: "Site",
-            value: siteUrl,
-            inline: false,
-          },
-        ],
+        fields,
       },
     ],
   });

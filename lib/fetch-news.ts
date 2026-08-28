@@ -7,8 +7,14 @@ import {
   RSS_FETCH_TIMEOUT_MS,
 } from "./news-sources";
 
-const DEEPL_FREE_URL = "https://api-free.deepl.com/v2/translate";
 const USER_AGENT = "g7-dashboard/0.1 (+https://github.com/g7-dashboard)";
+
+function getDeepLTranslateUrl(apiKey: string): string {
+  // Free keys end with :fx and must use api-free.deepl.com
+  return apiKey.endsWith(":fx")
+    ? "https://api-free.deepl.com/v2/translate"
+    : "https://api.deepl.com/v2/translate";
+}
 
 type RssEntry = {
   title: string;
@@ -42,7 +48,7 @@ async function translateOnce(
   targetLang: string,
   apiKey: string
 ): Promise<string[]> {
-  const resp = await fetch(DEEPL_FREE_URL, {
+  const resp = await fetch(getDeepLTranslateUrl(apiKey), {
     method: "POST",
     headers: {
       Authorization: `DeepL-Auth-Key ${apiKey}`,
@@ -81,6 +87,23 @@ async function translate(
   });
 }
 
+/** On quota/outage, keep headlines in the source language rather than dropping the country. */
+async function translateOrFallback(
+  texts: string[],
+  targetLang: string,
+  apiKey: string,
+  fallback: string[]
+): Promise<{ texts: string[]; degraded: boolean }> {
+  try {
+    const translated = await translate(texts, targetLang, apiKey);
+    return { texts: translated, degraded: false };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[fetch-news] DeepL ${targetLang} unavailable, using source titles: ${msg}`);
+    return { texts: fallback, degraded: true };
+  }
+}
+
 async function fetchRss(url: string, limit = 5): Promise<RssEntry[]> {
   const feed = await rssParser.parseURL(url);
   return (feed.items ?? []).slice(0, limit).map((item) => {
@@ -116,10 +139,15 @@ async function fetchRssForCountry(
   return { entries: [], source: src.source };
 }
 
+type ProcessCountryResult = {
+  country: CountryNews;
+  translationDegraded: boolean;
+};
+
 async function processCountry(
   src: NewsSourceConfig,
   deeplKey: string
-): Promise<CountryNews | null> {
+): Promise<ProcessCountryResult | null> {
   console.info(`[fetch-news] Processing ${src.code} (${src.source.name})...`);
   const { entries, source } = await fetchRssForCountry(src);
   if (entries.length === 0) {
@@ -130,16 +158,25 @@ async function processCountry(
   const titles = entries.map((e) => e.title);
   let jaTitles: string[];
   let enTitles: string[];
+  let translationDegraded = false;
 
   if (src.lang === "JA") {
     jaTitles = titles;
-    enTitles = await translate(titles, "EN-US", deeplKey);
+    const en = await translateOrFallback(titles, "EN-US", deeplKey, titles);
+    enTitles = en.texts;
+    translationDegraded ||= en.degraded;
   } else if (src.lang === "EN") {
-    jaTitles = await translate(titles, "JA", deeplKey);
+    const ja = await translateOrFallback(titles, "JA", deeplKey, titles);
+    jaTitles = ja.texts;
+    translationDegraded ||= ja.degraded;
     enTitles = titles;
   } else {
-    jaTitles = await translate(titles, "JA", deeplKey);
-    enTitles = await translate(titles, "EN-US", deeplKey);
+    const ja = await translateOrFallback(titles, "JA", deeplKey, titles);
+    jaTitles = ja.texts;
+    translationDegraded ||= ja.degraded;
+    const en = await translateOrFallback(titles, "EN-US", deeplKey, titles);
+    enTitles = en.texts;
+    translationDegraded ||= en.degraded;
   }
 
   const headlines: Headline[] = entries.map((entry, i) => ({
@@ -153,11 +190,14 @@ async function processCountry(
   }));
 
   return {
-    code: src.code,
-    flag: src.flag,
-    name: src.name,
-    source,
-    headlines,
+    country: {
+      code: src.code,
+      flag: src.flag,
+      name: src.name,
+      source,
+      headlines,
+    },
+    translationDegraded,
   };
 }
 
@@ -165,6 +205,7 @@ export type FetchNewsResult = {
   countriesWritten: number;
   totalSources: number;
   updatedAt: string;
+  translationDegraded: boolean;
 };
 
 export async function fetchAndStoreNews(): Promise<FetchNewsResult> {
@@ -181,11 +222,13 @@ export async function fetchAndStoreNews(): Promise<FetchNewsResult> {
 
   const countries: CountryNews[] = [];
   const failures: string[] = [];
+  let translationDegraded = false;
   for (let i = 0; i < settled.length; i++) {
     const result = settled[i];
     const code = NEWS_SOURCES[i].code;
     if (result.status === "fulfilled" && result.value) {
-      countries.push(result.value);
+      countries.push(result.value.country);
+      translationDegraded ||= result.value.translationDegraded;
     } else if (result.status === "rejected") {
       const reason = result.reason instanceof Error ? result.reason.message : String(result.reason);
       console.error(`[fetch-news] Country failed ${code}:`, result.reason);
@@ -222,5 +265,6 @@ export async function fetchAndStoreNews(): Promise<FetchNewsResult> {
     countriesWritten: countries.length,
     totalSources: NEWS_SOURCES.length,
     updatedAt: payload.updatedAt,
+    translationDegraded,
   };
 }

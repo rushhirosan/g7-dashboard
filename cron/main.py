@@ -213,17 +213,31 @@ RSS_FALLBACKS: dict[str, list[dict]] = {
 }
 
 DEEPL_FREE_URL = "https://api-free.deepl.com/v2/translate"
+DEEPL_PRO_URL = "https://api.deepl.com/v2/translate"
+
+
+def deepl_translate_url() -> str:
+    key = DEEPL_API_KEY or ""
+    return DEEPL_FREE_URL if key.endswith(":fx") else DEEPL_PRO_URL
 
 
 def translate(texts: list[str], target_lang: str) -> list[str]:
     resp = requests.post(
-        DEEPL_FREE_URL,
+        deepl_translate_url(),
         headers={"Authorization": f"DeepL-Auth-Key {DEEPL_API_KEY}"},
         json={"text": texts, "target_lang": target_lang},
         timeout=30,
     )
     resp.raise_for_status()
     return [t["text"] for t in resp.json()["translations"]]
+
+
+def translate_or_fallback(texts: list[str], target_lang: str) -> tuple[list[str], bool]:
+    try:
+        return translate(texts, target_lang), False
+    except Exception as exc:
+        log.warning("DeepL %s unavailable, using source titles: %s", target_lang, exc)
+        return texts, True
 
 
 def fetch_rss(url: str, limit: int = 5) -> list[dict]:
@@ -280,18 +294,23 @@ def process_country(src: dict) -> dict | None:
 
     titles = [e["title"] for e in entries]
     lang = src["lang"]
+    translation_degraded = False
 
     if lang == "JA":
         ja_titles = titles
-        en_titles = translate(titles, "EN-US")
+        en_titles, degraded = translate_or_fallback(titles, "EN-US")
+        translation_degraded = translation_degraded or degraded
     elif lang in ("EN", "EN-US", "EN-GB"):
-        ja_titles = translate(titles, "JA")
+        ja_titles, degraded = translate_or_fallback(titles, "JA")
+        translation_degraded = translation_degraded or degraded
         en_titles = titles
     else:
-        # FR / IT / DE → translate to both
-        ja_titles = translate(titles, "JA")
+        # FR / IT → translate to both
+        ja_titles, ja_degraded = translate_or_fallback(titles, "JA")
+        translation_degraded = translation_degraded or ja_degraded
         time.sleep(0.5)
-        en_titles = translate(titles, "EN-US")
+        en_titles, en_degraded = translate_or_fallback(titles, "EN-US")
+        translation_degraded = translation_degraded or en_degraded
 
     headlines = []
     for i, entry in enumerate(entries):
@@ -305,13 +324,16 @@ def process_country(src: dict) -> dict | None:
             "url": entry["url"],
         })
 
-    return {
+    result = {
         "code": src["code"],
         "flag": src["flag"],
         "name": src["name"],
         "source": source,
         "headlines": headlines,
     }
+    if translation_degraded:
+        log.warning("Stored %s with untranslated titles (DeepL unavailable)", src["code"])
+    return result
 
 
 def set_kv(key: str, value: dict) -> None:
