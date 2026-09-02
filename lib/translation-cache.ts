@@ -2,8 +2,8 @@
  * KV-backed cache of translated titles.
  *
  * The cron runs every 6h but the top-5 headlines change slowly, so most runs
- * re-translate text DeepL has already billed us for. Caching by source title
- * keeps monthly usage well under the free-tier limit.
+ * re-translate text the translator has already billed us for. Caching by source title
+ * keeps monthly usage well under the Azure F0 free-tier limit.
  */
 
 const CACHE_KEY = "news:tx-cache";

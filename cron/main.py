@@ -1,7 +1,7 @@
 """
 World Front Page — News Cron Job
-Fetches RSS feeds for G7 + major economies (China, India), translates via DeepL,
-and stores structured JSON in Vercel KV (Upstash Redis REST API).
+Fetches RSS feeds for G7 + major economies (China, India), translates via
+Azure Translator, and stores structured JSON in Vercel KV (Upstash Redis REST API).
 
 Schedule: 4x/day — 01:00 / 07:00 / 13:00 / 19:00 JST
 """
@@ -43,7 +43,11 @@ if not os.environ.get("KV_REST_API_TOKEN") and os.environ.get("UPSTASH_REDIS_RES
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
-DEEPL_API_KEY = os.environ.get("DEEPL_API_KEY")
+AZURE_TRANSLATOR_KEY = os.environ.get("AZURE_TRANSLATOR_KEY")
+AZURE_TRANSLATOR_REGION = os.environ.get("AZURE_TRANSLATOR_REGION")
+AZURE_TRANSLATOR_ENDPOINT = (
+    os.environ.get("AZURE_TRANSLATOR_ENDPOINT") or "https://api.cognitive.microsofttranslator.com"
+).rstrip("/")
 KV_REST_API_URL = os.environ.get("KV_REST_API_URL")
 KV_REST_API_TOKEN = os.environ.get("KV_REST_API_TOKEN")
 
@@ -212,31 +216,37 @@ RSS_FALLBACKS: dict[str, list[dict]] = {
     ],
 }
 
-DEEPL_FREE_URL = "https://api-free.deepl.com/v2/translate"
-DEEPL_PRO_URL = "https://api.deepl.com/v2/translate"
-
-
-def deepl_translate_url() -> str:
-    key = DEEPL_API_KEY or ""
-    return DEEPL_FREE_URL if key.endswith(":fx") else DEEPL_PRO_URL
+def to_azure_lang(target_lang: str) -> str:
+    # Keep JA / EN-US call sites for parity with TypeScript + translation cache keys.
+    if target_lang == "JA":
+        return "ja"
+    if target_lang.startswith("EN"):
+        return "en"
+    return target_lang.lower()
 
 
 def translate(texts: list[str], target_lang: str) -> list[str]:
+    to = to_azure_lang(target_lang)
     resp = requests.post(
-        deepl_translate_url(),
-        headers={"Authorization": f"DeepL-Auth-Key {DEEPL_API_KEY}"},
-        json={"text": texts, "target_lang": target_lang},
+        f"{AZURE_TRANSLATOR_ENDPOINT}/translate",
+        params={"api-version": "3.0", "to": to},
+        headers={
+            "Ocp-Apim-Subscription-Key": AZURE_TRANSLATOR_KEY or "",
+            "Ocp-Apim-Subscription-Region": AZURE_TRANSLATOR_REGION or "",
+            "Content-Type": "application/json",
+        },
+        json=[{"Text": t} for t in texts],
         timeout=30,
     )
     resp.raise_for_status()
-    return [t["text"] for t in resp.json()["translations"]]
+    return [item["translations"][0]["text"] for item in resp.json()]
 
 
 def translate_or_fallback(texts: list[str], target_lang: str) -> tuple[list[str], bool]:
     try:
         return translate(texts, target_lang), False
     except Exception as exc:
-        log.warning("DeepL %s unavailable, using source titles: %s", target_lang, exc)
+        log.warning("Azure Translator %s unavailable, using source titles: %s", target_lang, exc)
         return texts, True
 
 
@@ -332,7 +342,7 @@ def process_country(src: dict) -> dict | None:
         "headlines": headlines,
     }
     if translation_degraded:
-        log.warning("Stored %s with untranslated titles (DeepL unavailable)", src["code"])
+        log.warning("Stored %s with untranslated titles (Azure Translator unavailable)", src["code"])
     return result
 
 
@@ -353,7 +363,12 @@ def set_kv(key: str, value: dict) -> None:
 
 
 def main() -> None:
-    for key in ("DEEPL_API_KEY", "KV_REST_API_URL", "KV_REST_API_TOKEN"):
+    for key in (
+        "AZURE_TRANSLATOR_KEY",
+        "AZURE_TRANSLATOR_REGION",
+        "KV_REST_API_URL",
+        "KV_REST_API_TOKEN",
+    ):
         if not os.environ.get(key):
             log.error("Missing required env var: %s", key)
             raise SystemExit(1)

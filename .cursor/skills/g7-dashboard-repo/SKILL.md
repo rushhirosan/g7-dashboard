@@ -26,7 +26,7 @@ Product philosophy and conventions live in `.cursor/rules/g7-dashboard.mdc`. Thi
 
 | Path | Role |
 |------|------|
-| `lib/fetch-news.ts` | Production fetch: RSS → DeepL → KV write |
+| `lib/fetch-news.ts` | Production fetch: RSS → Azure Translator → KV write |
 | `lib/news-sources.ts` | 9-country source config, fallbacks, timeouts |
 | `lib/kv.ts` | KV read/write helpers |
 | `lib/types.ts` | `NewsData`, `CountryNews`, `Lang`, etc. |
@@ -69,7 +69,7 @@ Product philosophy and conventions live in `.cursor/rules/g7-dashboard.mdc`. Thi
 
 ## Environment variables
 
-See `.env.example`. Key vars: `KV_*`, `DEEPL_API_KEY`, `QSTASH_*`, `DISCORD_WEBHOOK_URL`, `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_GA_MEASUREMENT_ID`.
+See `.env.example`. Key vars: `KV_*`, `AZURE_TRANSLATOR_KEY`, `AZURE_TRANSLATOR_REGION`, `QSTASH_*`, `DISCORD_WEBHOOK_URL`, `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_GA_MEASUREMENT_ID`.
 
 ## When adding a feature
 

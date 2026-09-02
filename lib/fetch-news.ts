@@ -16,11 +16,21 @@ import {
 
 const USER_AGENT = "g7-dashboard/0.1 (+https://github.com/g7-dashboard)";
 
-function getDeepLTranslateUrl(apiKey: string): string {
-  // Free keys end with :fx and must use api-free.deepl.com
-  return apiKey.endsWith(":fx")
-    ? "https://api-free.deepl.com/v2/translate"
-    : "https://api.deepl.com/v2/translate";
+/** Azure Translator F0 free tier: 2M chars/month. */
+const AZURE_TRANSLATOR_ENDPOINT =
+  process.env.AZURE_TRANSLATOR_ENDPOINT?.replace(/\/$/, "") ??
+  "https://api.cognitive.microsofttranslator.com";
+
+export type TranslatorConfig = {
+  key: string;
+  region: string;
+};
+
+/** Keep cache keys as JA / EN-US (legacy DeepL codes) for hit continuity. */
+function toAzureLang(targetLang: string): string {
+  if (targetLang === "JA") return "ja";
+  if (targetLang.startsWith("EN")) return "en";
+  return targetLang.toLowerCase();
 }
 
 type RssEntry = {
@@ -38,12 +48,12 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Serialize DeepL calls — free tier rejects concurrent bursts with 429. */
-let deeplChain: Promise<unknown> = Promise.resolve();
+/** Serialize Azure calls — free tier rate-limits concurrent bursts. */
+let translateChain: Promise<unknown> = Promise.resolve();
 
-function enqueueDeepL<T>(fn: () => Promise<T>): Promise<T> {
-  const run = deeplChain.then(fn, fn);
-  deeplChain = run.then(
+function enqueueTranslate<T>(fn: () => Promise<T>): Promise<T> {
+  const run = translateChain.then(fn, fn);
+  translateChain = run.then(
     () => undefined,
     () => undefined
   );
@@ -53,38 +63,45 @@ function enqueueDeepL<T>(fn: () => Promise<T>): Promise<T> {
 async function translateOnce(
   texts: string[],
   targetLang: string,
-  apiKey: string
+  config: TranslatorConfig
 ): Promise<string[]> {
-  const resp = await fetch(getDeepLTranslateUrl(apiKey), {
+  const to = toAzureLang(targetLang);
+  const url = new URL(`${AZURE_TRANSLATOR_ENDPOINT}/translate`);
+  url.searchParams.set("api-version", "3.0");
+  url.searchParams.set("to", to);
+
+  const resp = await fetch(url, {
     method: "POST",
     headers: {
-      Authorization: `DeepL-Auth-Key ${apiKey}`,
+      "Ocp-Apim-Subscription-Key": config.key,
+      "Ocp-Apim-Subscription-Region": config.region,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ text: texts, target_lang: targetLang }),
+    body: JSON.stringify(texts.map((text) => ({ Text: text }))),
     signal: AbortSignal.timeout(30_000),
   });
   if (!resp.ok) {
-    throw new Error(`DeepL HTTP ${resp.status}`);
+    const detail = await resp.text().catch(() => "");
+    throw new Error(`Azure Translator HTTP ${resp.status}${detail ? `: ${detail.slice(0, 200)}` : ""}`);
   }
-  const data = (await resp.json()) as { translations: { text: string }[] };
-  return data.translations.map((t) => t.text);
+  const data = (await resp.json()) as { translations: { text: string }[] }[];
+  return data.map((item, i) => item.translations?.[0]?.text ?? texts[i]);
 }
 
 async function translate(
   texts: string[],
   targetLang: string,
-  apiKey: string
+  config: TranslatorConfig
 ): Promise<string[]> {
-  return enqueueDeepL(async () => {
+  return enqueueTranslate(async () => {
     let lastErr: unknown;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        return await translateOnce(texts, targetLang, apiKey);
+        return await translateOnce(texts, targetLang, config);
       } catch (err) {
         lastErr = err;
         const msg = err instanceof Error ? err.message : String(err);
-        if (!msg.includes("DeepL HTTP 429") && !msg.includes("DeepL HTTP 5")) {
+        if (!msg.includes("Azure Translator HTTP 429") && !msg.includes("Azure Translator HTTP 5")) {
           throw err;
         }
         await sleep(1000 * (attempt + 1));
@@ -101,7 +118,7 @@ async function translate(
 export async function translateOrFallback(
   texts: string[],
   targetLang: string,
-  apiKey: string,
+  config: TranslatorConfig,
   cache: TranslationCache
 ): Promise<{ texts: string[]; degraded: boolean }> {
   const results: (string | null)[] = texts.map((text) => getCached(cache, targetLang, text));
@@ -113,7 +130,7 @@ export async function translateOrFallback(
 
   const missingTexts = missingIndexes.map((i) => texts[i]);
   try {
-    const translated = await translate(missingTexts, targetLang, apiKey);
+    const translated = await translate(missingTexts, targetLang, config);
     missingIndexes.forEach((originalIndex, n) => {
       const text = translated[n];
       if (text === undefined) return;
@@ -123,7 +140,9 @@ export async function translateOrFallback(
     return { texts: results.map((r, i) => r ?? texts[i]), degraded: false };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[fetch-news] DeepL ${targetLang} unavailable, using source titles: ${msg}`);
+    console.warn(
+      `[fetch-news] Azure Translator ${targetLang} unavailable, using source titles: ${msg}`
+    );
     return { texts: results.map((r, i) => r ?? texts[i]), degraded: true };
   }
 }
@@ -170,7 +189,7 @@ type ProcessCountryResult = {
 
 async function processCountry(
   src: NewsSourceConfig,
-  deeplKey: string,
+  config: TranslatorConfig,
   cache: TranslationCache
 ): Promise<ProcessCountryResult | null> {
   console.info(`[fetch-news] Processing ${src.code} (${src.source.name})...`);
@@ -187,19 +206,19 @@ async function processCountry(
 
   if (src.lang === "JA") {
     jaTitles = titles;
-    const en = await translateOrFallback(titles, "EN-US", deeplKey, cache);
+    const en = await translateOrFallback(titles, "EN-US", config, cache);
     enTitles = en.texts;
     translationDegraded ||= en.degraded;
   } else if (src.lang === "EN") {
-    const ja = await translateOrFallback(titles, "JA", deeplKey, cache);
+    const ja = await translateOrFallback(titles, "JA", config, cache);
     jaTitles = ja.texts;
     translationDegraded ||= ja.degraded;
     enTitles = titles;
   } else {
-    const ja = await translateOrFallback(titles, "JA", deeplKey, cache);
+    const ja = await translateOrFallback(titles, "JA", config, cache);
     jaTitles = ja.texts;
     translationDegraded ||= ja.degraded;
-    const en = await translateOrFallback(titles, "EN-US", deeplKey, cache);
+    const en = await translateOrFallback(titles, "EN-US", config, cache);
     enTitles = en.texts;
     translationDegraded ||= en.degraded;
   }
@@ -233,18 +252,24 @@ export type FetchNewsResult = {
   translationDegraded: boolean;
 };
 
-export async function fetchAndStoreNews(): Promise<FetchNewsResult> {
-  const deeplKey = process.env.DEEPL_API_KEY;
-  if (!deeplKey) {
-    throw new Error("Missing DEEPL_API_KEY");
+function getTranslatorConfig(): TranslatorConfig {
+  const key = process.env.AZURE_TRANSLATOR_KEY;
+  const region = process.env.AZURE_TRANSLATOR_REGION;
+  if (!key || !region) {
+    throw new Error("Missing AZURE_TRANSLATOR_KEY or AZURE_TRANSLATOR_REGION");
   }
+  return { key, region };
+}
+
+export async function fetchAndStoreNews(): Promise<FetchNewsResult> {
+  const config = getTranslatorConfig();
 
   console.info("[fetch-news] === World Front Page cron started ===");
 
   const cache = await loadTranslationCache();
 
   const settled = await Promise.allSettled(
-    NEWS_SOURCES.map((src) => processCountry(src, deeplKey, cache))
+    NEWS_SOURCES.map((src) => processCountry(src, config, cache))
   );
 
   const countries: CountryNews[] = [];

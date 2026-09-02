@@ -8,7 +8,7 @@
 |----------------|--------------|------|
 | **ダッシュボード（Next.js）** | **Vercel** | UI 表示。Vercel KV から `news:latest` を読む |
 | **スケジューラ** | **Upstash QStash** | JST 01/07/13/19 に `/api/cron/fetch` を POST |
-| **ニュース取得** | **Vercel Serverless** | `lib/fetch-news.ts` — RSS → DeepL → KV |
+| **ニュース取得** | **Vercel Serverless** | `lib/fetch-news.ts` — RSS → Azure Translator → KV |
 
 > g7-dashboard の UI・データ更新とも **Vercel 上**。QStash は Upstash（KV と同アカウント）の cron サービス。
 
@@ -25,7 +25,7 @@
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  Vercel  app/api/cron/fetch/route.ts                        │
-│    lib/fetch-news.ts → RSS (9カ国) → DeepL → KV             │
+│    lib/fetch-news.ts → RSS (9カ国) → Azure Translator → KV │
 │    revalidatePath("/")                                       │
 └──────────────────────────┬──────────────────────────────────┘
                            │  SET news:latest
@@ -70,7 +70,7 @@ CRON_TZ=Asia/Tokyo 0 1,7,13,19 * * *
 
 | 変数 | 用途 |
 |------|------|
-| `DEEPL_API_KEY` | タイトル翻訳 |
+| `AZURE_TRANSLATOR_KEY` / `AZURE_TRANSLATOR_REGION` | タイトル翻訳（F0 無料枠） |
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | KV 読み書き（Redis 連携で自動設定可） |
 | `QSTASH_CURRENT_SIGNING_KEY` | QStash 署名検証 |
 | `QSTASH_NEXT_SIGNING_KEY` | QStash 署名検証（ローテーション用） |
@@ -103,7 +103,7 @@ QStash Console → Schedules → 対象スケジュール → **Trigger now**
 ### `POST /api/cron/fetch`
 
 - QStash からのみ受け付け（`verifySignatureAppRouter`）
-- RSS 取得 → DeepL → KV 書込 → `revalidatePath("/")`
+- RSS 取得 → Azure Translator → KV 書込 → `revalidatePath("/")`
 - 全件成功時: Discord 通知なし
 - 部分取得成功時: Discord 通知（国数・更新時刻・サイト URL、Webhook 設定時）
 - 失敗時: HTTP 500 + Discord 通知（Webhook 設定時）
@@ -147,7 +147,7 @@ npm run dev
 
 QStash 障害時の予備。Python `cron/main.py` を実行し `/api/revalidate` を呼ぶ。
 
-GitHub Secrets: `DEEPL_API_KEY`, `KV_*`, `REVALIDATE_SECRET`（任意: `DISCORD_WEBHOOK_URL`）
+GitHub Secrets: `AZURE_TRANSLATOR_KEY`, `AZURE_TRANSLATOR_REGION`, `KV_*`, `REVALIDATE_SECRET`（任意: `DISCORD_WEBHOOK_URL`）
 
 ---
 
@@ -164,7 +164,7 @@ GitHub Secrets: `DEEPL_API_KEY`, `KV_*`, `REVALIDATE_SECRET`（任意: `DISCORD_
 |------|------|
 | `scripts/setup-qstash.mjs` | QStash スケジュール登録 |
 | `app/api/cron/fetch/route.ts` | QStash ワーカー |
-| `lib/fetch-news.ts` | RSS + DeepL + KV |
+| `lib/fetch-news.ts` | RSS + Azure Translator + KV |
 | `lib/news-sources.ts` | 9カ国ソース定義 |
 | `.github/workflows/fetch-news.yml` | 手動バックアップ（Python） |
 | `cron/main.py` | Python 版（バックアップ） |
@@ -173,7 +173,7 @@ GitHub Secrets: `DEEPL_API_KEY`, `KV_*`, `REVALIDATE_SECRET`（任意: `DISCORD_
 
 ## 8. 運用チェックリスト
 
-- [ ] Vercel に `DEEPL_API_KEY`, `KV_*`, `QSTASH_*_SIGNING_KEY` を設定して Redeploy
+- [ ] Vercel に `AZURE_TRANSLATOR_KEY`, `AZURE_TRANSLATOR_REGION`, `KV_*`, `QSTASH_*_SIGNING_KEY` を設定して Redeploy
 - [ ] `npm run setup:qstash` でスケジュール登録
 - [ ] QStash Console で Trigger now → 本番「最終更新」が変わることを確認
 - [ ] （任意）Vercel に `DISCORD_WEBHOOK_URL` を設定

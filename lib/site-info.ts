@@ -52,13 +52,13 @@ export function getInfoPanelParagraphs(panel: InfoPanel, lang: Lang): string[] {
       ? [
           "World Front Page は、G7（日本・アメリカ・イギリス・ドイツ・フランス・イタリア・カナダ）に加え、中国・インドの主要メディアからトップニュース見出しを集約するダッシュボードです。",
           "各国・地域ごとに最大5件の見出しを表示し、選択した言語（日本語 / English）で読めます。見出しをクリックすると、各メディアの元記事が新しいタブで開きます。",
-          `ニュースデータは Upstash QStash により1日4回（${schedule}）自動取得されます。RSS から取得した見出しは DeepL API で翻訳され、Vercel KV に保存された最新データがこのページに表示されます。`,
+          `ニュースデータは Upstash QStash により1日4回（${schedule}）自動取得されます。RSS から取得した見出しは Azure Translator で翻訳され、Vercel KV に保存された最新データがこのページに表示されます。`,
           "ブラウザをリロードしても RSS の再取得は行われません。表示されている「最終更新」は、直近の自動取得が成功した時刻です。",
         ]
       : [
           "World Front Page aggregates top news headlines from major media in G7 countries (Japan, United States, United Kingdom, Germany, France, Italy, Canada) plus China and India.",
           "Up to five headlines are shown per country or region. Read them in your chosen language (Japanese / English). Click a headline to open the original article in a new tab.",
-          `News data is fetched automatically four times daily (${schedule}) via Upstash QStash. Headlines from RSS feeds are translated with the DeepL API and stored in Vercel KV; this page shows the latest snapshot.`,
+          `News data is fetched automatically four times daily (${schedule}) via Upstash QStash. Headlines from RSS feeds are translated with Azure Translator and stored in Vercel KV; this page shows the latest snapshot.`,
           "Reloading your browser does not re-fetch RSS feeds. The “last updated” time reflects the most recent successful scheduled fetch.",
         ];
   }
@@ -69,14 +69,14 @@ export function getInfoPanelParagraphs(panel: InfoPanel, lang: Lang): string[] {
           "アカウント登録やログインは不要です。氏名・メールアドレスなどの個人情報は収集しません。",
           "ライト / ダークモードの設定は、お使いのブラウザのローカルストレージに保存されます。",
           "見出しやメディア名のリンクをクリックすると、NHK・BBC など外部サイトへ移動します。それぞれのサイトには独自のプライバシーポリシーが適用されます。",
-          "ニュース取得・翻訳・保存はサーバー側で行われ、訪問者のブラウザから RSS や DeepL API へ直接アクセスすることはありません。",
+          "ニュース取得・翻訳・保存はサーバー側で行われ、訪問者のブラウザから RSS や翻訳 API へ直接アクセスすることはありません。",
           "アクセス解析に Google Analytics 4（GA4）を使用しています。Google Analytics は Cookie を使用し、匿名の利用状況データを収集します。詳細は Google のプライバシーポリシー（https://policies.google.com/privacy）をご覧ください。",
         ]
       : [
           "No account or login is required. We do not collect personal information such as names or email addresses.",
           "Your light / dark theme preference is stored in your browser’s local storage.",
           "Clicking headline or media links takes you to external sites (e.g. NHK, BBC), each governed by its own privacy policy.",
-          "News fetching, translation, and storage run on the server. Your browser does not contact RSS feeds or the DeepL API directly.",
+          "News fetching, translation, and storage run on the server. Your browser does not contact RSS feeds or the translation API directly.",
           "We use Google Analytics 4 (GA4) for traffic analysis. Google Analytics uses cookies to collect anonymous usage data. See Google’s privacy policy at https://policies.google.com/privacy.",
         ];
   }

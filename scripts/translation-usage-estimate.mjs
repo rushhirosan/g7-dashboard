@@ -1,6 +1,6 @@
 /**
- * Estimates DeepL characters consumed per cron run from live RSS titles.
- * Run: npx tsx scripts/deepl-usage-estimate.mjs
+ * Estimates translator characters consumed per cron run from live RSS titles.
+ * Run: npx tsx scripts/translation-usage-estimate.mjs
  */
 import Parser from "rss-parser";
 import { NEWS_SOURCES, RSS_FALLBACKS, RSS_FETCH_TIMEOUT_MS } from "../lib/news-sources.ts";
@@ -25,7 +25,7 @@ async function titlesFor(src) {
 }
 
 const RUNS_PER_DAY = 4;
-const FREE_MONTHLY_LIMIT = 500_000;
+const FREE_MONTHLY_LIMIT = 2_000_000;
 
 async function main() {
   let total = 0;

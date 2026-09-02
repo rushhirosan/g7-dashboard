@@ -15,7 +15,7 @@ G7（日・米・英・独・仏・伊・加）7カ国の主要メディアか�
 |------|------|
 | 本文 | **保存・表示しない**（タイトルのみ） |
 | 取得手段 | **RSS / 公開 API のみ**（スクレイピングなし） |
-| 翻訳 | **DeepL API**（タイトルのみ） |
+| 翻訳 | **Azure Translator**（タイトルのみ、F0 無料枠） |
 | UI ホスティング | **Vercel**（Next.js） |
 | データストア | **Vercel KV**（Upstash Redis） |
 | 更新頻度 | 1日4回（[SCHEDULER.md](./SCHEDULER.md) 参照） |
@@ -156,23 +156,24 @@ Headline {
 
 | ソース言語 | `ja` | `en` |
 |-----------|------|------|
-| JA（日本） | 原文 | DeepL → EN |
-| EN（米英独加等） | DeepL → JA | 原文 |
-| FR / IT | DeepL → JA | DeepL → EN |
+| JA（日本） | 原文 | Azure → EN |
+| EN（米英独加等） | Azure → JA | 原文 |
+| FR / IT | Azure → JA | Azure → EN |
 
-DeepL エンドポイント: API キーが `:fx` で終わる場合は `https://api-free.deepl.com/v2/translate`（無料枠）、
-それ以外は `https://api.deepl.com/v2/translate`（Pro）を自動選択。
+Azure Translator: グローバルエンドポイント `https://api.cognitive.microsofttranslator.com`
+（`AZURE_TRANSLATOR_ENDPOINT` で上書き可）。キーとリージョンは Azure Portal の Translator リソースから取得。
+F0（無料）は **月 200 万文字**。
 
 #### 翻訳キャッシュ（`lib/translation-cache.ts`）
 
-cron は 6 時間ごとに走るが見出しの入れ替わりは緩やかなため、無料枠 50 万文字/月では
-毎回全件翻訳すると月末に枯渇する（実測 約 49.5 万文字/月 = 98.9%）。
+cron は 6 時間ごとに走るが見出しの入れ替わりは緩やかなため、未キャッシュだと
+毎回全件翻訳になる。キャッシュで消費を抑える（実測のフルランは約 4〜5 万文字/回）。
 
 - KV キー `news:tx-cache` に `原文 → 訳文` を保存（保持期間 7 日）
-- キャッシュヒットした見出しは DeepL を呼ばない
-- 消費量の見積り: `npx tsx scripts/deepl-usage-estimate.mjs`
+- キャッシュヒットした見出しは翻訳 API を呼ばない
+- 消費量の見積り: `npx tsx scripts/translation-usage-estimate.mjs`
 
-#### DeepL 障害・クォータ超過時（degraded）
+#### 翻訳障害・クォータ超過時（degraded）
 
 - 翻訳に失敗しても国データは破棄せず、**原文のまま**保存する（`countriesWritten` は減らない）
 - キャッシュ済みの見出しは訳文を維持し、新規見出しのみ原文になる
@@ -232,7 +233,7 @@ cron は 6 時間ごとに走るが見出しの入れ替わりは緩やかなた
 | デプロイ（UI） | Vercel |
 | DB / キャッシュ | Vercel KV（Upstash Redis REST） |
 | バッチ | Python 3.12（`cron/`） |
-| 翻訳 | DeepL API |
+| 翻訳 | Azure Translator |
 
 ---
 
@@ -244,9 +245,10 @@ cron は 6 時間ごとに走るが見出しの入れ替わりは緩やかなた
 |------|-----------|------|
 | `KV_REST_API_URL` | Vercel, cron, ローカル（KV 直読時） | KV REST URL |
 | `KV_REST_API_TOKEN` | 同上 | KV 認証 |
-| `DEEPL_API_KEY` | cron, `fetch:snapshot` | タイトル翻訳 |
+| `AZURE_TRANSLATOR_KEY` | cron, `fetch:snapshot`, Vercel | タイトル翻訳 |
+| `AZURE_TRANSLATOR_REGION` | 同上 | Translator リソースのリージョン（例: `japaneast`） |
 
-Next.js 本番表示に DeepL は **不要**。
+Next.js 本番表示に翻訳 API は **不要**。
 
 ---
 

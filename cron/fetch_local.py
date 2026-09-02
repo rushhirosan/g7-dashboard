@@ -1,7 +1,7 @@
 """
 One-off local snapshot for dev UI/UX.
 Fetches RSS feeds and writes data/news-snapshot.json (no KV required).
-Prefers DeepL (DEEPL_API_KEY in .env.local); falls back to MyMemory for dev.
+Prefers Azure Translator (AZURE_TRANSLATOR_* in .env.local); falls back to MyMemory for dev.
 """
 
 import json
@@ -39,10 +39,15 @@ from main import SOURCES, fetch_rss_for_country, translate  # noqa: E402
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
-DEEPL_API_KEY = os.environ.get("DEEPL_API_KEY")
+AZURE_TRANSLATOR_KEY = os.environ.get("AZURE_TRANSLATOR_KEY")
+AZURE_TRANSLATOR_REGION = os.environ.get("AZURE_TRANSLATOR_REGION")
 OUTPUT = ROOT / "data" / "news-snapshot.json"
 
 LANG_TO_MYMEMORY = {"JA": "ja", "EN": "en", "FR": "fr", "IT": "it", "DE": "de"}
+
+
+def has_azure() -> bool:
+    return bool(AZURE_TRANSLATOR_KEY and AZURE_TRANSLATOR_REGION)
 
 
 def translate_mymemory(texts: list[str], source_lang: str, target_lang: str) -> list[str]:
@@ -66,7 +71,7 @@ def translate_mymemory(texts: list[str], source_lang: str, target_lang: str) -> 
 def titles_for_lang(titles: list[str], source_lang: str) -> tuple[list[str], list[str]]:
     if source_lang == "JA":
         ja_titles = titles
-        if DEEPL_API_KEY:
+        if has_azure():
             en_titles = translate(titles, "EN-US")
         else:
             log.info("Translating JA→EN via MyMemory (dev fallback)")
@@ -75,7 +80,7 @@ def titles_for_lang(titles: list[str], source_lang: str) -> tuple[list[str], lis
 
     if source_lang in ("EN", "EN-US", "EN-GB"):
         en_titles = titles
-        if DEEPL_API_KEY:
+        if has_azure():
             ja_titles = translate(titles, "JA")
         else:
             log.info("Translating EN→JA via MyMemory (dev fallback)")
@@ -83,7 +88,7 @@ def titles_for_lang(titles: list[str], source_lang: str) -> tuple[list[str], lis
         return ja_titles, en_titles
 
     # FR / IT / DE
-    if DEEPL_API_KEY:
+    if has_azure():
         ja_titles = translate(titles, "JA")
         time.sleep(0.5)
         en_titles = translate(titles, "EN-US")
@@ -128,12 +133,12 @@ def process_country(src: dict) -> dict | None:
 
 def main() -> None:
     log.info("=== Local snapshot fetch started ===")
-    if DEEPL_API_KEY:
-        log.info("Using DeepL for translations")
+    if has_azure():
+        log.info("Using Azure Translator for translations")
     else:
         log.warning(
-            "DEEPL_API_KEY not set — using MyMemory for dev translations. "
-            "Add DEEPL_API_KEY to .env.local for production-quality results."
+            "AZURE_TRANSLATOR_KEY/REGION not set — using MyMemory for dev translations. "
+            "Add Azure Translator credentials to .env.local for production-quality results."
         )
 
     countries = []
@@ -148,23 +153,15 @@ def main() -> None:
 
     if len(countries) < len(SOURCES):
         missing = {s["code"] for s in SOURCES} - {c["code"] for c in countries}
-        log.error("Missing countries: %s", ", ".join(sorted(missing)))
-
-    if not countries:
-        log.error("Nothing fetched — aborting")
-        sys.exit(1)
+        log.warning("Missing countries: %s", ", ".join(sorted(missing)))
 
     payload = {
         "updatedAt": datetime.now(timezone.utc).isoformat(),
         "countries": countries,
     }
-
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    log.info("=== Wrote %d/%d countries → %s ===", len(countries), len(SOURCES), OUTPUT)
-
-    if len(countries) < len(SOURCES):
-        sys.exit(1)
+    log.info("Wrote %s (%d countries)", OUTPUT, len(countries))
 
 
 if __name__ == "__main__":

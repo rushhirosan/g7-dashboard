@@ -22,7 +22,7 @@ alwaysApply: true
 ## Tech Stack
 - **Frontend**: Next.js 15 (App Router), React 19, Tailwind CSS, next-themes
 - **Data**: Vercel KV (`@vercel/kv`), ISR `revalidate = 21600`
-- **Fetch (prod)**: TypeScript `lib/fetch-news.ts` (RSS → DeepL → KV)
+- **Fetch (prod)**: TypeScript `lib/fetch-news.ts` (RSS → Azure Translator → KV)
 - **Fetch (backup/dev)**: Python `cron/main.py`, `npm run fetch:snapshot`
 - **Scheduler**: Upstash QStash (JST 01/07/13/19)
 - **Deploy**: Vercel (push to `main` auto-deploys)
@@ -55,7 +55,7 @@ QStash → POST /api/cron/fetch → lib/fetch-news.ts → KV (news:latest)
 ## News Pipeline Rules
 - Source config lives in `lib/news-sources.ts` — keep TS and Python `cron/` in sync when adding/changing feeds
 - Use **fallback RSS URLs** (`RSS_FALLBACKS`) when primary feeds fail (HTTP redirects, timeouts)
-- DeepL translates titles only; respect rate limits and timeouts
+- Azure Translator translates titles only; respect rate limits and timeouts
 - Discord notifications: **failure and partial fetch only** — skip full success (`lib/notify-discord.ts`)
 - Log fetch outcomes; do not silently swallow country-level failures
 

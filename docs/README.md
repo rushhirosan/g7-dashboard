@@ -8,7 +8,7 @@
 ## クイックスタート
 
 ```bash
-cp .env.example .env.local   # DEEPL_API_KEY 等を設定
+cp .env.example .env.local   # AZURE_TRANSLATOR_* 等を設定
 npm install
 npm run fetch:snapshot       # ローカル用データ生成（任意）
 npm run dev

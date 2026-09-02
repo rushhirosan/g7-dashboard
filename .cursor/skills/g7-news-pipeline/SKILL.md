@@ -1,6 +1,6 @@
 ---
 name: g7-news-pipeline
-description: Guides g7-dashboard RSS fetching, DeepL translation, Vercel KV storage, QStash scheduling, Python backup cron, and Discord alert policy. Use when adding or changing news sources, cron jobs, fetch logic, fallbacks, or when the user mentions RSS, QStash, KV, DeepL, or Discord notifications.
+description: Guides g7-dashboard RSS fetching, Azure Translator, Vercel KV storage, QStash scheduling, Python backup cron, and Discord alert policy. Use when adding or changing news sources, cron jobs, fetch logic, fallbacks, or when the user mentions RSS, QStash, KV, Azure Translator, or Discord notifications.
 ---
 
 # g7-dashboard — News Fetch Pipeline
@@ -21,7 +21,7 @@ QStash (JST 01/07/13/19)
 | Path | Role |
 |------|------|
 | `app/api/cron/fetch/route.ts` | QStash entry, maxDuration 300 |
-| `lib/fetch-news.ts` | Parallel per-country fetch, DeepL, KV write |
+| `lib/fetch-news.ts` | Parallel per-country fetch, Azure Translator, KV write |
 | `lib/news-sources.ts` | `NEWS_SOURCES`, `RSS_FALLBACKS`, timeouts |
 | `lib/translation-cache.ts` | KV cache of translated titles (`news:tx-cache`, 7d) |
 | `lib/notify-discord.ts` | Alert on **partial**, **degraded** or **failure** only — not full success |
@@ -37,7 +37,7 @@ QStash (JST 01/07/13/19)
 
 ## Adding or changing a source
 
-1. Add entry to `NEWS_SOURCES` in `lib/news-sources.ts` (code, flag, RSS, DeepL lang).
+1. Add entry to `NEWS_SOURCES` in `lib/news-sources.ts` (code, flag, RSS, source lang).
 2. Add matching entry in `cron/main.py` `SOURCES` — keep both in sync.
 3. If the primary RSS is flaky, add `RSS_FALLBACKS[code]` with alternate feed + source metadata.
 4. Test locally: `npm run fetch:snapshot` or trigger QStash manually.
@@ -48,11 +48,10 @@ QStash (JST 01/07/13/19)
 - Timeout: `RSS_FETCH_TIMEOUT_MS` (60s); User-Agent set for rss-parser
 - Top **5** headlines per country
 - Countries fetched in parallel; missing countries reduce `countriesWritten` but don't fail the whole job unless nothing is written
-- DeepL: titles only; requires `DEEPL_API_KEY` in Vercel Production
-- Endpoint auto-selected: `:fx` key → api-free, otherwise → api.deepl.com (Pro)
-- Translations cached in KV; only new titles are billed. Free tier is 500k chars/month and
-  uncached usage measures ~495k/month, so the cache is what keeps the job inside the quota
-- DeepL failure never drops a country — titles fall back to the source language (`translationDegraded`)
+- Azure Translator: titles only; requires `AZURE_TRANSLATOR_KEY` + `AZURE_TRANSLATOR_REGION` in Vercel Production
+- F0 free tier: 2M characters/month — plenty with KV translation cache
+- Translations cached in KV; only new titles are billed
+- Translator failure never drops a country — titles fall back to the source language (`translationDegraded`)
 
 ## Discord notification policy
 

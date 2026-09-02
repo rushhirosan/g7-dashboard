@@ -34,7 +34,8 @@ jobs:
           summary=$(grep -oE 'Done: [0-9]+/[0-9]+ countries written' fetch.log | tail -1 || true)
           echo "summary=${summary:-Fetch completed}" >> "$GITHUB_OUTPUT"
         env:
-          DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
+          AZURE_TRANSLATOR_KEY: ${{ secrets.AZURE_TRANSLATOR_KEY }}
+          AZURE_TRANSLATOR_REGION: ${{ secrets.AZURE_TRANSLATOR_REGION }}
           KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
           KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
 

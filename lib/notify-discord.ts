@@ -40,8 +40,9 @@ function formatUpdatedAtJst(iso: string): string {
 }
 
 /**
- * A drained DeepL quota stays drained until the monthly reset, so alerting on
- * every 6h run is pure noise. Partial-country alerts are not throttled.
+ * A drained translator quota can stay drained for the rest of the billing
+ * period, so alerting on every 6h run is pure noise. Partial-country alerts
+ * are not throttled.
  */
 async function shouldAlertDegradedTranslation(): Promise<boolean> {
   const key = "news:tx-degraded-alert";
@@ -85,7 +86,7 @@ export async function notifyDiscordPartialFetch(result: FetchNewsResult): Promis
   if (result.translationDegraded) {
     fields.push({
       name: "Translation",
-      value: "DeepL unavailable — some titles kept in source language (check quota or API key)",
+      value: "Azure Translator unavailable — some titles kept in source language (check key, region, or quota)",
       inline: false,
     });
   }
