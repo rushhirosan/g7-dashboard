@@ -51,7 +51,7 @@ QStash (JST 01/07/13/19)
 - Azure Translator: titles only; requires `AZURE_TRANSLATOR_KEY` + `AZURE_TRANSLATOR_REGION` in Vercel Production
 - F0 free tier: 2M characters/month — plenty with KV translation cache
 - Translations cached in KV; only new titles are billed
-- Translator failure never drops a country — titles fall back to the source language (`translationDegraded`)
+- Translator failure never drops a country — titles fall back to the source language (`translationDegraded`). Discord includes the Azure HTTP status (`translationError`)
 
 ## Discord notification policy
 

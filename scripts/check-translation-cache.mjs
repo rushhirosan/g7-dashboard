@@ -61,6 +61,11 @@ async function main() {
   const r4 = await translateOrFallback(["Alpha headline", "Delta"], "JA", config, cache);
   assert("quota failure keeps cached translation", r4.texts, ["[T]Alpha headline", "Delta"]);
   assert("quota failure marks degraded", r4.degraded, true);
+  assert(
+    "quota failure keeps the Azure status",
+    r4.error.includes("Azure Translator HTTP 429"),
+    true
+  );
 
   // Different target language must not collide with the JA cache
   failNext = false;

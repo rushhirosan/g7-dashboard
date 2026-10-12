@@ -115,12 +115,23 @@ async function translate(
  * Translates only titles missing from the cache. On quota/outage, keeps
  * headlines in the source language rather than dropping the country.
  */
+export type TranslateFallbackResult = {
+  texts: string[];
+  degraded: boolean;
+  /** Azure status and response snippet. Set only when `degraded` is true. */
+  error?: string;
+};
+
+function pushUnique(errors: string[], error: string | undefined) {
+  if (error && !errors.includes(error)) errors.push(error);
+}
+
 export async function translateOrFallback(
   texts: string[],
   targetLang: string,
   config: TranslatorConfig,
   cache: TranslationCache
-): Promise<{ texts: string[]; degraded: boolean }> {
+): Promise<TranslateFallbackResult> {
   const results: (string | null)[] = texts.map((text) => getCached(cache, targetLang, text));
 
   const missingIndexes = results.flatMap((r, i) => (r === null ? [i] : []));
@@ -143,7 +154,7 @@ export async function translateOrFallback(
     console.warn(
       `[fetch-news] Azure Translator ${targetLang} unavailable, using source titles: ${msg}`
     );
-    return { texts: results.map((r, i) => r ?? texts[i]), degraded: true };
+    return { texts: results.map((r, i) => r ?? texts[i]), degraded: true, error: msg };
   }
 }
 
@@ -185,6 +196,7 @@ async function fetchRssForCountry(
 type ProcessCountryResult = {
   country: CountryNews;
   translationDegraded: boolean;
+  translationError?: string;
 };
 
 async function processCountry(
@@ -203,24 +215,25 @@ async function processCountry(
   let jaTitles: string[];
   let enTitles: string[];
   let translationDegraded = false;
+  const translationErrors: string[] = [];
+
+  const take = (outcome: TranslateFallbackResult): string[] => {
+    if (outcome.degraded) {
+      translationDegraded = true;
+      pushUnique(translationErrors, outcome.error);
+    }
+    return outcome.texts;
+  };
 
   if (src.lang === "JA") {
     jaTitles = titles;
-    const en = await translateOrFallback(titles, "EN-US", config, cache);
-    enTitles = en.texts;
-    translationDegraded ||= en.degraded;
+    enTitles = take(await translateOrFallback(titles, "EN-US", config, cache));
   } else if (src.lang === "EN") {
-    const ja = await translateOrFallback(titles, "JA", config, cache);
-    jaTitles = ja.texts;
-    translationDegraded ||= ja.degraded;
+    jaTitles = take(await translateOrFallback(titles, "JA", config, cache));
     enTitles = titles;
   } else {
-    const ja = await translateOrFallback(titles, "JA", config, cache);
-    jaTitles = ja.texts;
-    translationDegraded ||= ja.degraded;
-    const en = await translateOrFallback(titles, "EN-US", config, cache);
-    enTitles = en.texts;
-    translationDegraded ||= en.degraded;
+    jaTitles = take(await translateOrFallback(titles, "JA", config, cache));
+    enTitles = take(await translateOrFallback(titles, "EN-US", config, cache));
   }
 
   const headlines: Headline[] = entries.map((entry, i) => ({
@@ -242,6 +255,7 @@ async function processCountry(
       headlines,
     },
     translationDegraded,
+    translationError: translationErrors.join("\n") || undefined,
   };
 }
 
@@ -250,6 +264,8 @@ export type FetchNewsResult = {
   totalSources: number;
   updatedAt: string;
   translationDegraded: boolean;
+  /** Distinct Azure failures from this run. Set only when `translationDegraded` is true. */
+  translationError?: string;
 };
 
 function getTranslatorConfig(): TranslatorConfig {
@@ -275,12 +291,18 @@ export async function fetchAndStoreNews(): Promise<FetchNewsResult> {
   const countries: CountryNews[] = [];
   const failures: string[] = [];
   let translationDegraded = false;
+  const translationErrors: string[] = [];
   for (let i = 0; i < settled.length; i++) {
     const result = settled[i];
     const code = NEWS_SOURCES[i].code;
     if (result.status === "fulfilled" && result.value) {
       countries.push(result.value.country);
-      translationDegraded ||= result.value.translationDegraded;
+      if (result.value.translationDegraded) {
+        translationDegraded = true;
+        for (const error of result.value.translationError?.split("\n") ?? []) {
+          pushUnique(translationErrors, error);
+        }
+      }
     } else if (result.status === "rejected") {
       const reason = result.reason instanceof Error ? result.reason.message : String(result.reason);
       console.error(`[fetch-news] Country failed ${code}:`, result.reason);
@@ -310,6 +332,10 @@ export async function fetchAndStoreNews(): Promise<FetchNewsResult> {
   await kv.set("news:latest", payload);
   await saveTranslationCache(cache);
 
+  const translationError = translationErrors.join("\n") || undefined;
+  if (translationError) {
+    console.warn(`[fetch-news] Translations degraded: ${translationError}`);
+  }
   console.info(
     `[fetch-news] === Done: ${countries.length}/${NEWS_SOURCES.length} countries written ===`
   );
@@ -319,5 +345,6 @@ export async function fetchAndStoreNews(): Promise<FetchNewsResult> {
     totalSources: NEWS_SOURCES.length,
     updatedAt: payload.updatedAt,
     translationDegraded,
+    translationError,
   };
 }

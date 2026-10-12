@@ -84,9 +84,12 @@ export async function notifyDiscordPartialFetch(result: FetchNewsResult): Promis
   ];
 
   if (result.translationDegraded) {
+    const detail = result.translationError?.slice(0, 900);
     fields.push({
       name: "Translation",
-      value: "Azure Translator unavailable — some titles kept in source language (check key, region, or quota)",
+      value: detail
+        ? `Azure Translator unavailable — some titles kept in source language\n${detail}`
+        : "Azure Translator unavailable — some titles kept in source language (check key, region, or quota)",
       inline: false,
     });
   }
